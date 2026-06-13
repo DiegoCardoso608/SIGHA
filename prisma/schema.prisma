@@ -1,0 +1,238 @@
+// prisma/schema.prisma
+// SIGHA — Sistema Inteligente de Gestão de Horários Acadêmicos
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Perfil {
+  ADMIN
+  COORDENADOR
+  PROFESSOR
+  ALUNO
+}
+
+enum Titulacao {
+  GRADUADO
+  ESPECIALISTA
+  MESTRE
+  DOUTOR
+  DOUTORA
+  POS_DOUTOR
+}
+
+enum DiaSemana {
+  SEGUNDA
+  TERCA
+  QUARTA
+  QUINTA
+  SEXTA
+  SABADO
+}
+
+enum Turno {
+  MANHA
+  TARDE
+  NOITE
+}
+
+enum StatusAlocacao {
+  PENDENTE
+  CONFIRMADA
+  CONFLITO
+}
+
+enum Modalidade {
+  PRESENCIAL
+  EAD
+  HIBRIDO
+}
+
+// ─── Usuários e autenticação ──────────────────────────────────────────────────
+
+model Usuario {
+  id        String   @id @default(cuid())
+  matricula String?  @unique
+  nome      String
+  email     String   @unique
+  senhaHash String
+  perfil    Perfil
+  ativo     Boolean  @default(true)
+  criadoEm  DateTime @default(now())
+
+  professor Professor?
+  logs      LogAlteracao[]
+
+  @@map("usuarios")
+}
+
+// ─── Estrutura acadêmica ──────────────────────────────────────────────────────
+
+model Curso {
+  id             String    @id @default(cuid())
+  codigo         String    @unique
+  nome           String
+  modalidade     Modalidade @default(PRESENCIAL)
+  totalPeriodos  Int
+  ativo          Boolean   @default(true)
+  criadoEm       DateTime  @default(now())
+
+  disciplinas CursoDisciplina[]
+  turmas      Turma[]
+
+  @@map("cursos")
+}
+
+model Disciplina {
+  id           String   @id @default(cuid())
+  codigo       String   @unique
+  nome         String
+  cargaHoraria Int
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now())
+
+  cursos       CursoDisciplina[]
+  professores  ProfessorDisciplina[]
+  alocacoes    Alocacao[]
+
+  @@map("disciplinas")
+}
+
+// Tabela de junção curso <-> disciplina com o período correto
+model CursoDisciplina {
+  id           String  @id @default(cuid())
+  cursoId      String
+  disciplinaId String
+  periodo      Int     // 1 a 8
+  obrigatoria  Boolean @default(true)
+
+  curso      Curso      @relation(fields: [cursoId], references: [id])
+  disciplina Disciplina @relation(fields: [disciplinaId], references: [id])
+
+  @@unique([cursoId, disciplinaId])
+  @@map("curso_disciplinas")
+}
+
+model Turma {
+  id       String  @id @default(cuid())
+  codigo   String  @unique  // ex: CC-2026.1-7A
+  nome     String
+  cursoId  String
+  periodo  Int
+  turno    Turno
+  semestre String  // ex: 2026.1
+  ativo    Boolean @default(true)
+
+  curso     Curso      @relation(fields: [cursoId], references: [id])
+  alocacoes Alocacao[]
+
+  @@map("turmas")
+}
+
+// ─── Professores ──────────────────────────────────────────────────────────────
+
+model Professor {
+  id              String    @id @default(cuid())
+  usuarioId       String    @unique
+
+  titulacao       Titulacao
+  cargaHorariaMax Int
+  ativo           Boolean   @default(true)
+  criadoEm        DateTime  @default(now())
+
+  usuario         Usuario @relation(fields: [usuarioId], references: [id])
+
+  disciplinas      ProfessorDisciplina[]
+  disponibilidades Disponibilidade[]
+  alocacoes        Alocacao[]
+
+  @@map("professores")
+}
+
+// Disciplinas que o professor está autorizado a ministrar
+model ProfessorDisciplina {
+  id           String @id @default(cuid())
+  professorId  String
+  disciplinaId String
+
+  professor  Professor  @relation(fields: [professorId], references: [id])
+  disciplina Disciplina @relation(fields: [disciplinaId], references: [id])
+
+  @@unique([professorId, disciplinaId])
+  @@map("professor_disciplinas")
+}
+
+// Disponibilidade por dia da semana e turno
+model Disponibilidade {
+  id          String    @id @default(cuid())
+  professorId String
+  diaSemana   DiaSemana
+  turno       Turno
+
+  professor Professor @relation(fields: [professorId], references: [id])
+
+  @@unique([professorId, diaSemana, turno])
+  @@map("disponibilidades")
+}
+
+// ─── Horários ─────────────────────────────────────────────────────────────────
+
+model BlocoHorario {
+  id     String @id @default(cuid())
+  inicio String // ex: "08:00"
+  fim    String // ex: "08:50"
+  turno  Turno
+  ordem  Int    // ordem dentro do turno
+
+  alocacoes Alocacao[]
+
+  @@unique([inicio, turno])
+  @@map("blocos_horario")
+}
+
+// ─── Alocações (o coração do sistema) ────────────────────────────────────────
+
+model Alocacao {
+  id           String         @id @default(cuid())
+  turmaId      String
+  disciplinaId String
+  professorId  String?        // pode ser null (pendente)
+  blocoId      String
+  diaSemana    DiaSemana
+  online       Boolean        @default(false) // aulas de sábado geralmente online
+  status       StatusAlocacao @default(PENDENTE)
+  criadoEm     DateTime       @default(now())
+  atualizadoEm DateTime       @updatedAt
+
+  turma      Turma        @relation(fields: [turmaId], references: [id])
+  disciplina Disciplina   @relation(fields: [disciplinaId], references: [id])
+  professor  Professor?   @relation(fields: [professorId], references: [id])
+  bloco      BlocoHorario @relation(fields: [blocoId], references: [id])
+
+  @@map("alocacoes")
+}
+
+// ─── Auditoria ────────────────────────────────────────────────────────────────
+
+model LogAlteracao {
+  id          String   @id @default(cuid())
+  usuarioId   String
+  entidade    String   // ex: "Alocacao", "Professor"
+  entidadeId  String
+  campo       String?  // campo alterado
+  valorAntes  String?
+  valorDepois String?
+  motivo      String?
+  criadoEm    DateTime @default(now())
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@map("logs_alteracao")
+}
