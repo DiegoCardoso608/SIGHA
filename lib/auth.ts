@@ -3,6 +3,21 @@ import CredentialsProvider from 'next-auth/providers/credentials'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 
+// ─── Type Augmentation para NextAuth ──────────────────────────────────────────
+
+declare module 'next-auth' {
+  interface Session {
+    user: {
+      id: string
+      name?: string | null
+      email?: string | null
+      image?: string | null
+      perfil?: string
+      matricula?: string | null
+    }
+  }
+}
+
 const loginSchema = z.object({
   email: z.string().email(),
   senha: z.string().min(6),

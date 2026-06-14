@@ -1,159 +1,257 @@
-// src/app/api/professores/route.ts
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { prisma } from '@/lib/prisma'
-import { authOptions } from '@/lib/auth'
-import { z } from 'zod'
-import bcrypt from 'bcryptjs'
+// app/api/professores/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import bcrypt from "bcryptjs";
+import { z } from "zod";
 
-const professorSchema = z.object({
-  nome: z.string().min(3, 'Nome deve ter ao menos 3 caracteres'),
-  email: z.string().email('Email inválido'),
-  matricula: z.string().min(3, 'Matrícula obrigatória'),
-  titulacao: z.string().min(1, 'Titulação obrigatória'),
-  cargaHorariaMax: z.number().min(1).max(60),
-  senha: z.string().min(6, 'Senha deve ter ao menos 6 caracteres').optional(),
-  disciplinaIds: z.array(z.string()).optional(),
+// ─── Schema de criação ────────────────────────────────────────────────────────
+
+const criarProfessorSchema = z.object({
+  nome: z.string().min(3, "Nome deve ter ao menos 3 caracteres"),
+  email: z.string().email("E-mail inválido"),
+  matricula: z.string().optional(),
+  senhaInicial: z.string().min(6, "Senha deve ter ao menos 6 caracteres"),
+  titulacao: z.enum([
+    "GRADUADO",
+    "ESPECIALISTA",
+    "MESTRE",
+    "DOUTOR",
+    "DOUTORA",
+    "POS_DOUTOR",
+  ]),
+  cargaHorariaMax: z.number().int().min(1).max(40),
+  disciplinaIds: z.array(z.string()).optional().default([]),
   disponibilidades: z
     .array(
       z.object({
-        diaSemana: z.enum(['SEGUNDA', 'TERCA', 'QUARTA', 'QUINTA', 'SEXTA', 'SABADO']),
-        turno: z.enum(['MANHA', 'TARDE', 'NOITE']),
+        diaSemana: z.enum([
+          "SEGUNDA",
+          "TERCA",
+          "QUARTA",
+          "QUINTA",
+          "SEXTA",
+          "SABADO",
+        ]),
+        turno: z.enum(["MANHA", "TARDE", "NOITE"]),
       })
     )
-    .optional(),
-})
+    .optional()
+    .default([]),
+});
+
+// ─── GET /api/professores ─────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  }
 
-  const { searchParams } = new URL(req.url)
-  const busca = searchParams.get('busca') || ''
-  const pagina = parseInt(searchParams.get('pagina') || '1')
-  const limite = parseInt(searchParams.get('limite') || '20')
-  const skip = (pagina - 1) * limite
+  const { searchParams } = new URL(req.url);
 
-  const where = busca
-    ? {
-        OR: [
-          { usuario: { nome: { contains: busca, mode: 'insensitive' as const } } },
-          { usuario: { email: { contains: busca, mode: 'insensitive' as const } } },
-          { usuario: { matricula: { contains: busca, mode: 'insensitive' as const } } },
-        ],
-        ativo: true,
-      }
-    : { ativo: true }
+  const busca = searchParams.get("busca") ?? "";
+  const ativo = searchParams.get("ativo");
+  const titulacao = searchParams.get("titulacao");
+  const pagina = Math.max(1, parseInt(searchParams.get("pagina") ?? "1"));
+  const porPagina = Math.min(
+    50,
+    Math.max(1, parseInt(searchParams.get("porPagina") ?? "10"))
+  );
+  const skip = (pagina - 1) * porPagina;
 
-  const [profs, total] = await Promise.all([
+  // Monta filtro dinâmico
+  const where: Record<string, unknown> = {};
+
+  if (ativo !== null && ativo !== "") {
+    where.ativo = ativo === "true";
+  }
+
+  if (titulacao) {
+    where.titulacao = titulacao;
+  }
+
+  if (busca) {
+    where.usuario = {
+      OR: [
+        { nome: { contains: busca, mode: "insensitive" } },
+        { email: { contains: busca, mode: "insensitive" } },
+        { matricula: { contains: busca, mode: "insensitive" } },
+      ],
+    };
+  }
+
+  const [total, professores] = await Promise.all([
+    prisma.professor.count({ where }),
     prisma.professor.findMany({
       where,
       skip,
-      take: limite,
+      take: porPagina,
+      orderBy: { usuario: { nome: "asc" } },
       include: {
-        usuario: true,
-        disciplinas: {
-          include: { disciplina: { select: { id: true, nome: true, codigo: true } } },
+        usuario: {
+          select: {
+            id: true,
+            nome: true,
+            email: true,
+            matricula: true,
+            ativo: true,
+            criadoEm: true,
+          },
         },
-        disponibilidades: true,
-        _count: { select: { alocacoes: true } },
+        disciplinas: {
+          include: {
+            disciplina: {
+              select: { id: true, codigo: true, nome: true },
+            },
+          },
+        },
+        disponibilidades: {
+          select: { id: true, diaSemana: true, turno: true },
+          orderBy: [{ diaSemana: "asc" }, { turno: "asc" }],
+        },
+        _count: {
+          select: { alocacoes: true },
+        },
       },
-      orderBy: { usuario: { nome: 'asc' } },
     }),
-    prisma.professor.count({ where }),
-  ])
-
-  const professores = profs.map((p) => ({
-    id: p.id,
-    nome: p.usuario.nome,
-    email: p.usuario.email,
-    matricula: p.usuario.matricula,
-    titulacao: p.titulacao,
-    cargaHorariaMax: p.cargaHorariaMax,
-    ativo: p.ativo,
-    criadoEm: p.criadoEm,
-    disciplinas: p.disciplinas,
-    disponibilidades: p.disponibilidades,
-    _count: p._count,
-  }))
+  ]);
 
   return NextResponse.json({
     data: professores,
-    meta: { total, pagina, limite, totalPaginas: Math.ceil(total / limite) },
-  })
+    meta: {
+      total,
+      pagina,
+      porPagina,
+      totalPaginas: Math.ceil(total / porPagina),
+    },
+  });
 }
 
-export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+// ─── POST /api/professores ────────────────────────────────────────────────────
 
-  const body = await req.json()
-  const parsed = professorSchema.safeParse(body)
+export async function POST(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  }
+
+  const body = await req.json();
+  const parsed = criarProfessorSchema.safeParse(body);
 
   if (!parsed.success) {
     return NextResponse.json(
-      { error: 'Dados inválidos', detalhes: parsed.error.flatten().fieldErrors },
+      { error: "Dados inválidos", detalhes: parsed.error.flatten() },
       { status: 400 }
-    )
+    );
   }
 
-  const { nome, email, matricula, titulacao, cargaHorariaMax, senha, disciplinaIds, disponibilidades } =
-    parsed.data
+  const {
+    nome,
+    email,
+    matricula,
+    senhaInicial,
+    titulacao,
+    cargaHorariaMax,
+    disciplinaIds,
+    disponibilidades,
+  } = parsed.data;
 
-  const usuarioExistente = await prisma.usuario.findUnique({ where: { email } })
-  if (usuarioExistente) {
-    return NextResponse.json({ error: 'Email já cadastrado' }, { status: 409 })
+  // Verifica duplicidade de e-mail
+  const emailExistente = await prisma.usuario.findUnique({ where: { email } });
+  if (emailExistente) {
+    return NextResponse.json(
+      { error: "E-mail já cadastrado" },
+      { status: 409 }
+    );
   }
 
-  const senhaHash = await bcrypt.hash(senha || 'sigha@2026', 10)
+  // Verifica duplicidade de matrícula
+  if (matricula) {
+    const matriculaExistente = await prisma.usuario.findUnique({
+      where: { matricula },
+    });
+    if (matriculaExistente) {
+      return NextResponse.json(
+        { error: "Matrícula já cadastrada" },
+        { status: 409 }
+      );
+    }
+  }
 
-  const professor = await prisma.professor.create({
-    data: {
-      usuario: {
-        create: {
-          nome,
-          email,
-          matricula,
-          senhaHash,
-          perfil: 'PROFESSOR',
-        },
+  const senhaHash = await bcrypt.hash(senhaInicial, 12);
+
+  const professor = await prisma.$transaction(async (tx) => {
+    // Cria usuário
+    const usuario = await tx.usuario.create({
+      data: {
+        nome,
+        email,
+        matricula: matricula || null,
+        senhaHash,
+        perfil: "PROFESSOR",
+        ativo: true,
       },
-      titulacao,
-      cargaHorariaMax,
-      disciplinas: disciplinaIds
-        ? { create: disciplinaIds.map((id) => ({ disciplinaId: id })) }
-        : undefined,
-      disponibilidades: disponibilidades ? { create: disponibilidades } : undefined,
-    },
-    include: {
-      usuario: true,
-      disciplinas: { include: { disciplina: true } },
-      disponibilidades: true,
-    },
-  })
+    });
 
-  // Registrar auditoria
-  await prisma.logAlteracao.create({
-    data: {
-      usuarioId: session.user.id,
-      entidade: 'Professor',
-      entidadeId: professor.id,
-      valorDepois: JSON.stringify({ nome, email, matricula }),
-    },
-  })
+    // Cria professor vinculado
+    const prof = await tx.professor.create({
+      data: {
+        usuarioId: usuario.id,
+        titulacao,
+        cargaHorariaMax,
+        ativo: true,
+      },
+    });
 
-  const resultado = {
-    id: professor.id,
-    nome: professor.usuario.nome,
-    email: professor.usuario.email,
-    matricula: professor.usuario.matricula,
-    titulacao: professor.titulacao,
-    cargaHorariaMax: professor.cargaHorariaMax,
-    ativo: professor.ativo,
-    criadoEm: professor.criadoEm,
-    disciplinas: professor.disciplinas,
-    disponibilidades: professor.disponibilidades,
-  }
+    // Vincula disciplinas
+    if (disciplinaIds.length > 0) {
+      await tx.professorDisciplina.createMany({
+        data: disciplinaIds.map((disciplinaId) => ({
+          professorId: prof.id,
+          disciplinaId,
+        })),
+        skipDuplicates: true,
+      });
+    }
 
-  return NextResponse.json({ data: resultado }, { status: 201 })
+    // Cadastra disponibilidades
+    if (disponibilidades.length > 0) {
+      await tx.disponibilidade.createMany({
+        data: disponibilidades.map((d) => ({
+          professorId: prof.id,
+          diaSemana: d.diaSemana,
+          turno: d.turno,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    // Log de auditoria
+    await tx.logAlteracao.create({
+      data: {
+        usuarioId: session.user.id,
+        entidade: "Professor",
+        entidadeId: prof.id,
+        campo: "criacao",
+        valorAntes: null,
+        valorDepois: JSON.stringify({ nome, email, titulacao, cargaHorariaMax }),
+        motivo: "Cadastro de novo professor",
+      },
+    });
+
+    return tx.professor.findUnique({
+      where: { id: prof.id },
+      include: {
+        usuario: {
+          select: { id: true, nome: true, email: true, matricula: true },
+        },
+        disciplinas: { include: { disciplina: true } },
+        disponibilidades: true,
+      },
+    });
+  });
+
+  return NextResponse.json({ data: professor }, { status: 201 });
 }

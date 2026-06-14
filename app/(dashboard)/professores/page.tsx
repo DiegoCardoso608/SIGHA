@@ -1,336 +1,491 @@
-'use client'
+"use client";
 
-import { useState, useEffect } from 'react'
-import { cn } from '@/lib/utils'
-import { useProfessores, type Professor } from '@/hooks/useProfessores'
-import { ProfessorModal } from '@/components/professores/ProfessorModal'
+// app/(dashboard)/professores/page.tsx
+import { useCallback, useEffect, useState } from "react";
+import { ProfessorModal } from "@/components/professores/ProfessorModal";
+import { DesativarModal } from "@/components/professores/DesativarModal";
+
+// ─── Tipos ────────────────────────────────────────────────────────────────────
+
+const TITULACAO_LABEL: Record<string, string> = {
+  GRADUADO: "Graduado",
+  ESPECIALISTA: "Especialista",
+  MESTRE: "Mestre",
+  DOUTOR: "Doutor",
+  DOUTORA: "Doutora",
+  POS_DOUTOR: "Pós-Doutor",
+};
 
 const TITULACAO_COR: Record<string, string> = {
-  Doutor: 'bg-purple-50 text-purple-800 border-purple-200',
-  Mestre: 'bg-blue-50 text-blue-800 border-blue-200',
-  Especialista: 'bg-amber-50 text-amber-800 border-amber-200',
-  'Pós-Doutor': 'bg-[#e8f5e9] text-[#1b5e20] border-[#a5d6a7]',
+  GRADUADO: "bg-gray-100 text-gray-600",
+  ESPECIALISTA: "bg-blue-50 text-blue-600",
+  MESTRE: "bg-violet-50 text-violet-600",
+  DOUTOR: "bg-amber-50 text-amber-700",
+  DOUTORA: "bg-amber-50 text-amber-700",
+  POS_DOUTOR: "bg-green-50 text-green-700",
+};
+
+interface Professor {
+  id: string;
+  titulacao: string;
+  cargaHorariaMax: number;
+  ativo: boolean;
+  criadoEm: string;
+  usuario: {
+    id: string;
+    nome: string;
+    email: string;
+    matricula?: string | null;
+    ativo: boolean;
+  };
+  disciplinas: { disciplina: { id: string; codigo: string; nome: string } }[];
+  disponibilidades: { diaSemana: "SEGUNDA" | "TERCA" | "QUARTA" | "QUINTA" | "SEXTA" | "SABADO"; turno: "MANHA" | "TARDE" | "NOITE" }[];
+  _count: { alocacoes: number };
 }
 
-const DIAS_LABEL: Record<string, string> = {
-  SEGUNDA: 'Seg',
-  TERCA: 'Ter',
-  QUARTA: 'Qua',
-  QUINTA: 'Qui',
-  SEXTA: 'Sex',
-  SABADO: 'Sáb',
+interface Meta {
+  total: number;
+  pagina: number;
+  porPagina: number;
+  totalPaginas: number;
 }
 
-const TURNOS_LABEL: Record<string, string> = {
-  MANHA: 'M',
-  TARDE: 'T',
-  NOITE: 'N',
-}
+// ─── Componente ───────────────────────────────────────────────────────────────
 
 export default function ProfessoresPage() {
-  const { professores, meta, loading, erro, busca, setBusca, pagina, setPagina, criar, atualizar, desativar } =
-    useProfessores()
+  const [professores, setProfessores] = useState<Professor[]>([]);
+  const [meta, setMeta] = useState<Meta>({
+    total: 0,
+    pagina: 1,
+    porPagina: 10,
+    totalPaginas: 0,
+  });
+  const [carregando, setCarregando] = useState(true);
 
-  const [disciplinas, setDisciplinas] = useState<{ id: string; nome: string; codigo: string }[]>([])
-  const [modalAberto, setModalAberto] = useState(false)
-  const [professorEditando, setProfessorEditando] = useState<Professor | null>(null)
-  const [confirmandoId, setConfirmandoId] = useState<string | null>(null)
-  const [feedback, setFeedback] = useState<{ tipo: 'ok' | 'erro'; msg: string } | null>(null)
+  // Filtros
+  const [busca, setBusca] = useState("");
+  const [filtroAtivo, setFiltroAtivo] = useState<"" | "true" | "false">("");
+  const [filtroTitulacao, setFiltroTitulacao] = useState("");
+  const [pagina, setPagina] = useState(1);
+
+  // Modais
+  const [modalAberto, setModalAberto] = useState(false);
+  const [professorEditando, setProfessorEditando] = useState<Professor | null>(null);
+  const [desativarModalAberto, setDesativarModalAberto] = useState(false);
+  const [professorDesativando, setProfessorDesativando] = useState<Professor | null>(null);
+
+  // Busca com debounce
+  const [buscaDebounced, setBuscaDebounced] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setBuscaDebounced(busca), 400);
+    return () => clearTimeout(t);
+  }, [busca]);
+
+  // Reset página ao filtrar
+  useEffect(() => {
+    setPagina(1);
+  }, [buscaDebounced, filtroAtivo, filtroTitulacao]);
+
+  // Carrega dados
+  const carregar = useCallback(async () => {
+    setCarregando(true);
+    try {
+      const params = new URLSearchParams({
+        pagina: String(pagina),
+        porPagina: "10",
+        ...(buscaDebounced ? { busca: buscaDebounced } : {}),
+        ...(filtroAtivo !== "" ? { ativo: filtroAtivo } : {}),
+        ...(filtroTitulacao ? { titulacao: filtroTitulacao } : {}),
+      });
+
+      const res = await fetch(`/api/professores?${params}`);
+      const json = await res.json();
+
+      if (res.ok) {
+        setProfessores(json.data);
+        setMeta(json.meta);
+      }
+    } finally {
+      setCarregando(false);
+    }
+  }, [pagina, buscaDebounced, filtroAtivo, filtroTitulacao]);
 
   useEffect(() => {
-    fetch('/api/disciplinas')
-      .then((r) => r.json())
-      .then((j) => setDisciplinas(j.data || []))
-  }, [])
+    carregar();
+  }, [carregar]);
 
-  function abrirNovo() {
-    setProfessorEditando(null)
-    setModalAberto(true)
-  }
+  // Handlers
+  const abrirCadastro = () => {
+    setProfessorEditando(null);
+    setModalAberto(true);
+  };
 
-  function abrirEditar(prof: Professor) {
-    setProfessorEditando(prof)
-    setModalAberto(true)
-  }
+  const abrirEdicao = (prof: Professor) => {
+    setProfessorEditando(prof);
+    setModalAberto(true);
+  };
 
-  async function salvar(dados: Parameters<typeof criar>[0]) {
-    const result = professorEditando
-      ? await atualizar(professorEditando.id, dados)
-      : await criar(dados)
-    if (result.ok) {
-      mostrarFeedback('ok', professorEditando ? 'Professor atualizado.' : 'Professor cadastrado.')
-    }
-    return result
-  }
+  const abrirDesativar = (prof: Professor) => {
+    setProfessorDesativando(prof);
+    setDesativarModalAberto(true);
+  };
 
-  async function confirmarDesativacao(id: string) {
-    const result = await desativar(id)
-    setConfirmandoId(null)
-    if (result.ok) mostrarFeedback('ok', 'Professor desativado.')
-    else mostrarFeedback('erro', result.erro || 'Erro ao desativar.')
-  }
-
-  function mostrarFeedback(tipo: 'ok' | 'erro', msg: string) {
-    setFeedback({ tipo, msg })
-    setTimeout(() => setFeedback(null), 3500)
-  }
-
-  // Resumo de disponibilidade por dia
-  function diasAtivos(prof: Professor) {
-    const dias = new Set(prof.disponibilidades.map((d) => d.diaSemana))
-    return ['SEGUNDA', 'TERCA', 'QUARTA', 'QUINTA', 'SEXTA', 'SABADO'].filter((d) => dias.has(d as any))
-  }
+  const reativar = async (prof: Professor) => {
+    if (!confirm(`Reativar ${prof.usuario.nome}?`)) return;
+    await fetch(`/api/professores/${prof.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ativo: true, motivo: "Reativação pelo coordenador" }),
+    });
+    carregar();
+  };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      {/* Cabeçalho */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-800">Professores</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {meta.total} professor{meta.total !== 1 ? 'es' : ''} cadastrado{meta.total !== 1 ? 's' : ''}
-          </p>
-        </div>
-        <button
-          onClick={abrirNovo}
-          className="bg-[#2e7d32] text-white px-5 py-2 rounded text-sm font-medium hover:bg-[#1a5c1a] transition"
-        >
-          + Novo professor
-        </button>
-      </div>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
-      {/* Busca */}
-      <div className="mb-4">
-        <input
-          type="text"
-          value={busca}
-          onChange={(e) => {
-            setBusca(e.target.value)
-            setPagina(1)
-          }}
-          placeholder="Buscar por nome, email ou matrícula..."
-          className="border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-[#2e7d32] bg-white w-full max-w-md"
-        />
-      </div>
-
-      {/* Feedback */}
-      {feedback && (
-        <div
-          className={cn(
-            'mb-4 px-4 py-3 rounded text-sm border',
-            feedback.tipo === 'ok'
-              ? 'bg-[#e8f5e9] text-[#1b5e20] border-[#a5d6a7]'
-              : 'bg-red-50 text-red-800 border-red-200'
-          )}
-        >
-          {feedback.msg}
-        </div>
-      )}
-
-      {/* Estado de erro */}
-      {erro && (
-        <div className="bg-red-50 border border-red-200 text-red-800 text-sm px-4 py-3 rounded mb-4">
-          {erro}
-        </div>
-      )}
-
-      {/* Tabela */}
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-        {loading ? (
-          <div className="py-16 text-center text-sm text-gray-400">Carregando...</div>
-        ) : professores.length === 0 ? (
-          <div className="py-16 text-center">
-            <p className="text-gray-400 text-sm">
-              {busca ? 'Nenhum professor encontrado para essa busca.' : 'Nenhum professor cadastrado.'}
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Professores</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              {meta.total} professor{meta.total !== 1 ? "es" : ""} cadastrado{meta.total !== 1 ? "s" : ""}
             </p>
-            {!busca && (
-              <button
-                onClick={abrirNovo}
-                className="mt-3 text-[#2e7d32] text-sm underline hover:no-underline"
-              >
-                Cadastrar o primeiro professor
-              </button>
-            )}
           </div>
-        ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Professor
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Titulação
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  C.H. máx.
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Disponibilidade
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Disciplinas
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Alocações
-                </th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {professores.map((prof) => (
-                <tr key={prof.id} className="hover:bg-gray-50 transition-colors">
-                  {/* Professor */}
-                  <td className="px-4 py-3">
-                    <div className="font-medium text-sm text-gray-800">{prof.nome}</div>
-                    <div className="text-xs text-gray-400">{prof.email}</div>
-                    <div className="text-[10px] text-gray-300 font-mono">{prof.matricula}</div>
-                  </td>
+          <button
+            onClick={abrirCadastro}
+            className="flex items-center gap-2 px-4 py-2.5 bg-green-700 hover:bg-green-800 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Novo professor
+          </button>
+        </div>
 
-                  {/* Titulação */}
-                  <td className="px-4 py-3">
-                    <span
-                      className={cn(
-                        'text-xs px-2.5 py-0.5 rounded-full border',
-                        TITULACAO_COR[prof.titulacao] ?? 'bg-gray-50 text-gray-600 border-gray-200'
-                      )}
-                    >
-                      {prof.titulacao}
-                    </span>
-                  </td>
+        {/* Filtros */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-6">
+          <div className="flex flex-col sm:flex-row gap-3">
+            {/* Busca */}
+            <div className="flex-1 relative">
+              <svg
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar por nome, e-mail ou matrícula..."
+                className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
+            </div>
 
-                  {/* C.H. */}
-                  <td className="px-4 py-3">
-                    <span className="text-sm text-gray-700">{prof.cargaHorariaMax}h</span>
-                  </td>
+            {/* Filtro titulação */}
+            <select
+              value={filtroTitulacao}
+              onChange={(e) => setFiltroTitulacao(e.target.value)}
+              className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white min-w-[140px]"
+            >
+              <option value="">Todas as titulações</option>
+              <option value="GRADUADO">Graduado</option>
+              <option value="ESPECIALISTA">Especialista</option>
+              <option value="MESTRE">Mestre</option>
+              <option value="DOUTOR">Doutor</option>
+              <option value="DOUTORA">Doutora</option>
+              <option value="POS_DOUTOR">Pós-Doutor</option>
+            </select>
 
-                  {/* Disponibilidade */}
-                  <td className="px-4 py-3">
-                    <div className="flex gap-1 flex-wrap">
-                      {diasAtivos(prof).map((dia) => {
-                        const turnos = prof.disponibilidades
-                          .filter((d) => d.diaSemana === dia)
-                          .map((d) => TURNOS_LABEL[d.turno])
-                          .join('')
-                        return (
-                          <span
-                            key={dia}
-                            className="text-[10px] bg-[#e8f5e9] text-[#1b5e20] border border-[#a5d6a7] rounded px-1.5 py-0.5"
-                            title={`${DIAS_LABEL[dia]}: ${turnos}`}
-                          >
-                            {DIAS_LABEL[dia]}({turnos})
-                          </span>
-                        )
-                      })}
-                      {prof.disponibilidades.length === 0 && (
-                        <span className="text-xs text-gray-400">Sem disponibilidade</span>
-                      )}
-                    </div>
-                  </td>
-
-                  {/* Disciplinas */}
-                  <td className="px-4 py-3">
-                    <div className="flex gap-1 flex-wrap max-w-[200px]">
-                      {prof.disciplinas.slice(0, 3).map((d) => (
-                        <span
-                          key={d.disciplina.id}
-                          className="text-[10px] bg-gray-100 text-gray-600 rounded px-1.5 py-0.5"
-                          title={d.disciplina.nome}
-                        >
-                          {d.disciplina.codigo}
-                        </span>
-                      ))}
-                      {prof.disciplinas.length > 3 && (
-                        <span className="text-[10px] bg-gray-100 text-gray-600 rounded px-1.5 py-0.5">
-                          +{prof.disciplinas.length - 3}
-                        </span>
-                      )}
-                      {prof.disciplinas.length === 0 && (
-                        <span className="text-xs text-gray-400">—</span>
-                      )}
-                    </div>
-                  </td>
-
-                  {/* Alocações */}
-                  <td className="px-4 py-3">
-                    <span className="text-sm text-gray-600">{prof._count?.alocacoes ?? 0}</span>
-                  </td>
-
-                  {/* Ações */}
-                  <td className="px-4 py-3">
-                    {confirmandoId === prof.id ? (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => confirmarDesativacao(prof.id)}
-                          className="text-xs px-2 py-1 bg-red-50 text-red-700 rounded hover:bg-red-100"
-                        >
-                          Confirmar
-                        </button>
-                        <button
-                          onClick={() => setConfirmandoId(null)}
-                          className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200"
-                        >
-                          Cancelar
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={() => abrirEditar(prof)}
-                          className="text-xs text-[#2e7d32] hover:underline"
-                        >
-                          Editar
-                        </button>
-                        <button
-                          onClick={() => setConfirmandoId(prof.id)}
-                          className="text-xs text-red-600 hover:underline"
-                        >
-                          Desativar
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
+            {/* Filtro status */}
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
+              {(
+                [
+                  { value: "", label: "Todos" },
+                  { value: "true", label: "Ativos" },
+                  { value: "false", label: "Inativos" },
+                ] as const
+              ).map((op) => (
+                <button
+                  key={op.value}
+                  onClick={() => setFiltroAtivo(op.value)}
+                  className={`px-3 py-2 transition-colors ${
+                    filtroAtivo === op.value
+                      ? "bg-green-700 text-white"
+                      : "text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {op.label}
+                </button>
               ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {/* Paginação */}
-      {meta.totalPaginas > 1 && (
-        <div className="flex items-center justify-between mt-4">
-          <p className="text-xs text-gray-500">
-            Mostrando {(pagina - 1) * meta.limite + 1}–{Math.min(pagina * meta.limite, meta.total)} de{' '}
-            {meta.total}
-          </p>
-          <div className="flex gap-1">
-            <button
-              onClick={() => setPagina(pagina - 1)}
-              disabled={pagina === 1}
-              className="px-3 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              ← Anterior
-            </button>
-            <button
-              onClick={() => setPagina(pagina + 1)}
-              disabled={pagina === meta.totalPaginas}
-              className="px-3 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Próxima →
-            </button>
+            </div>
           </div>
         </div>
-      )}
 
-      {/* Modal */}
+        {/* Tabela */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          {carregando ? (
+            <div className="flex items-center justify-center py-16">
+              <div className="flex flex-col items-center gap-3">
+                <svg className="animate-spin w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+                <span className="text-sm text-gray-400">Carregando professores...</span>
+              </div>
+            </div>
+          ) : professores.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+                <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+              <p className="text-gray-500 font-medium">Nenhum professor encontrado</p>
+              <p className="text-sm text-gray-400 mt-1">
+                {busca || filtroAtivo || filtroTitulacao
+                  ? "Tente ajustar os filtros"
+                  : "Cadastre o primeiro professor"}
+              </p>
+              {!busca && !filtroAtivo && !filtroTitulacao && (
+                <button
+                  onClick={abrirCadastro}
+                  className="mt-4 px-4 py-2 bg-green-700 text-white text-sm rounded-lg hover:bg-green-800 transition-colors"
+                >
+                  Cadastrar professor
+                </button>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-100">
+                      <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Professor
+                      </th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Titulação
+                      </th>
+                      <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        CH máx.
+                      </th>
+                      <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Disciplinas
+                      </th>
+                      <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Alocações
+                      </th>
+                      <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Status
+                      </th>
+                      <th className="px-4 py-3" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {professores.map((prof) => (
+                      <tr
+                        key={prof.id}
+                        className={`hover:bg-gray-50/50 transition-colors ${
+                          !prof.ativo ? "opacity-60" : ""
+                        }`}
+                      >
+                        {/* Nome + email */}
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center shrink-0">
+                              <span className="text-sm font-semibold text-green-700">
+                                {prof.usuario.nome.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">
+                                {prof.usuario.nome}
+                              </p>
+                              <p className="text-xs text-gray-400">{prof.usuario.email}</p>
+                              {prof.usuario.matricula && (
+                                <p className="text-xs text-gray-300 font-mono">
+                                  {prof.usuario.matricula}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Titulação */}
+                        <td className="px-4 py-4">
+                          <span
+                            className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              TITULACAO_COR[prof.titulacao] ?? "bg-gray-100 text-gray-600"
+                            }`}
+                          >
+                            {TITULACAO_LABEL[prof.titulacao] ?? prof.titulacao}
+                          </span>
+                        </td>
+
+                        {/* Carga horária */}
+                        <td className="px-4 py-4 text-center">
+                          <span className="text-sm text-gray-700">
+                            {prof.cargaHorariaMax}h
+                          </span>
+                        </td>
+
+                        {/* Disciplinas */}
+                        <td className="px-4 py-4 text-center">
+                          <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-100 text-xs font-medium text-gray-600">
+                            {prof.disciplinas.length}
+                          </span>
+                        </td>
+
+                        {/* Alocações */}
+                        <td className="px-4 py-4 text-center">
+                          <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-50 text-xs font-medium text-blue-600">
+                            {prof._count.alocacoes}
+                          </span>
+                        </td>
+
+                        {/* Status */}
+                        <td className="px-4 py-4 text-center">
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                              prof.ativo
+                                ? "bg-green-50 text-green-700"
+                                : "bg-gray-100 text-gray-500"
+                            }`}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                prof.ativo ? "bg-green-500" : "bg-gray-400"
+                              }`}
+                            />
+                            {prof.ativo ? "Ativo" : "Inativo"}
+                          </span>
+                        </td>
+
+                        {/* Ações */}
+                        <td className="px-4 py-4">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => abrirEdicao(prof)}
+                              title="Editar"
+                              className="p-1.5 text-gray-400 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+
+                            {prof.ativo ? (
+                              <button
+                                onClick={() => abrirDesativar(prof)}
+                                title="Desativar"
+                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                </svg>
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => reativar(prof)}
+                                title="Reativar"
+                                className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Paginação */}
+              {meta.totalPaginas > 1 && (
+                <div className="flex items-center justify-between px-5 py-4 border-t border-gray-100">
+                  <p className="text-sm text-gray-500">
+                    Mostrando {(meta.pagina - 1) * meta.porPagina + 1}–
+                    {Math.min(meta.pagina * meta.porPagina, meta.total)} de {meta.total}
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setPagina((p) => Math.max(1, p - 1))}
+                      disabled={pagina === 1}
+                      className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Anterior
+                    </button>
+                    {Array.from({ length: meta.totalPaginas }, (_, i) => i + 1)
+                      .filter(
+                        (p) =>
+                          p === 1 ||
+                          p === meta.totalPaginas ||
+                          Math.abs(p - pagina) <= 1
+                      )
+                      .reduce<(number | "...")[]>((acc, p, i, arr) => {
+                        if (i > 0 && p - (arr[i - 1] as number) > 1)
+                          acc.push("...");
+                        acc.push(p);
+                        return acc;
+                      }, [])
+                      .map((p, i) =>
+                        p === "..." ? (
+                          <span key={`dots-${i}`} className="px-2 text-gray-400 text-sm">
+                            …
+                          </span>
+                        ) : (
+                          <button
+                            key={p}
+                            onClick={() => setPagina(p as number)}
+                            className={`w-8 h-8 text-sm rounded-lg transition-colors ${
+                              pagina === p
+                                ? "bg-green-700 text-white"
+                                : "text-gray-600 hover:bg-gray-100"
+                            }`}
+                          >
+                            {p}
+                          </button>
+                        )
+                      )}
+                    <button
+                      onClick={() => setPagina((p) => Math.min(meta.totalPaginas, p + 1))}
+                      disabled={pagina === meta.totalPaginas}
+                      className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Próxima
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Modais */}
       <ProfessorModal
         aberto={modalAberto}
         professor={professorEditando}
-        disciplinasDisponiveis={disciplinas}
         onFechar={() => setModalAberto(false)}
-        onSalvar={salvar}
+        onSalvo={carregar}
       />
+
+      {desativarModalAberto && professorDesativando && (
+        <DesativarModal
+          aberto={desativarModalAberto}
+          nomeProfessor={professorDesativando.usuario.nome}
+          professorId={professorDesativando.id}
+          onFechar={() => setDesativarModalAberto(false)}
+          onDesativado={carregar}
+        />
+      )}
     </div>
-  )
+  );
 }
