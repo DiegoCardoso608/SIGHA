@@ -55,6 +55,19 @@ enum Modalidade {
   HIBRIDO
 }
 
+// NOVO — Sprint 3
+enum StatusPeriodoLetivo {
+  PLANEJAMENTO
+  ATIVO
+  FINALIZADO
+}
+
+enum TipoProfessor {
+  TITULAR
+  SUBSTITUTO
+  RESERVA
+}
+
 // ─── Usuários e autenticação ──────────────────────────────────────────────────
 
 model Usuario {
@@ -76,13 +89,13 @@ model Usuario {
 // ─── Estrutura acadêmica ──────────────────────────────────────────────────────
 
 model Curso {
-  id             String    @id @default(cuid())
-  codigo         String    @unique
-  nome           String
-  modalidade     Modalidade @default(PRESENCIAL)
-  totalPeriodos  Int
-  ativo          Boolean   @default(true)
-  criadoEm       DateTime  @default(now())
+  id            String     @id @default(cuid())
+  codigo        String     @unique
+  nome          String
+  modalidade    Modalidade @default(PRESENCIAL)
+  totalPeriodos Int
+  ativo         Boolean    @default(true)
+  criadoEm      DateTime   @default(now())
 
   disciplinas CursoDisciplina[]
   turmas      Turma[]
@@ -98,9 +111,9 @@ model Disciplina {
   ativo        Boolean  @default(true)
   criadoEm     DateTime @default(now())
 
-  cursos       CursoDisciplina[]
-  professores  ProfessorDisciplina[]
-  alocacoes    Alocacao[]
+  cursos      CursoDisciplina[]
+  professores ProfessorDisciplina[]
+  alocacoes   Alocacao[]
 
   @@map("disciplinas")
 }
@@ -120,38 +133,63 @@ model CursoDisciplina {
   @@map("curso_disciplinas")
 }
 
+// ─── NOVO — Período Letivo (Sprint 3) ────────────────────────────────────────
+// Representa o semestre do calendário acadêmico: 2026.1, 2026.2, etc.
+
+model PeriodoLetivo {
+  id         String              @id @default(cuid())
+  ano        Int                 // ex: 2026
+  semestre   Int                 // 1 ou 2
+  descricao  String              // ex: "2026.1"  — gerado automaticamente
+  dataInicio DateTime
+  dataFim    DateTime
+  status     StatusPeriodoLetivo @default(PLANEJAMENTO)
+  criadoEm   DateTime            @default(now())
+
+  turmas Turma[]
+
+  // Não pode existir dois períodos com mesmo ano+semestre
+  @@unique([ano, semestre])
+  @@map("periodos_letivos")
+}
+
+// ─── Turma (atualizada na Sprint 3) ──────────────────────────────────────────
+
 model Turma {
-  id       String  @id @default(cuid())
-  codigo   String  @unique  // ex: CC-2026.1-7A
-  nome     String
-  cursoId  String
-  periodo  Int
-  turno    Turno
-  semestre String  // ex: 2026.1
-  ativo    Boolean @default(true)
+  id              String  @id @default(cuid())
+  codigo          String  // ex: CC-2026.1-7A
+  nome            String
+  cursoId         String
+  periodoLetivoId String  // FK para PeriodoLetivo  ← NOVO
+  periodo         Int     // período da matriz curricular (1–8)
+  turno           Turno
+  ativo           Boolean @default(true)
 
-  curso     Curso      @relation(fields: [cursoId], references: [id])
-  alocacoes Alocacao[]
+  curso         Curso         @relation(fields: [cursoId], references: [id])
+  periodoLetivo PeriodoLetivo @relation(fields: [periodoLetivoId], references: [id])
+  alocacoes     Alocacao[]
 
+  // Código único por período letivo (mesmo código pode ser reutilizado em semestres diferentes)
+  @@unique([codigo, periodoLetivoId])
   @@map("turmas")
 }
 
 // ─── Professores ──────────────────────────────────────────────────────────────
 
 model Professor {
-  id              String    @id @default(cuid())
-  usuarioId       String    @unique
-
+  id              String        @id @default(cuid())
+  usuarioId       String        @unique
   titulacao       Titulacao
   cargaHorariaMax Int
-  ativo           Boolean   @default(true)
-  criadoEm        DateTime  @default(now())
+  tipo            TipoProfessor @default(TITULAR)
+  ativo           Boolean       @default(true)
+  criadoEm        DateTime      @default(now())
 
-  usuario         Usuario @relation(fields: [usuarioId], references: [id])
-
-  disciplinas      ProfessorDisciplina[]
-  disponibilidades Disponibilidade[]
-  alocacoes        Alocacao[]
+  usuario               Usuario               @relation(fields: [usuarioId], references: [id])
+  disciplinas           ProfessorDisciplina[]
+  disponibilidades      Disponibilidade[]
+  disponibilidadesBloco DisponibilidadeBloco[]
+  alocacoes             Alocacao[]
 
   @@map("professores")
 }
@@ -191,10 +229,27 @@ model BlocoHorario {
   turno  Turno
   ordem  Int    // ordem dentro do turno
 
-  alocacoes Alocacao[]
+  alocacoes             Alocacao[]
+  disponibilidadesBloco DisponibilidadeBloco[]
 
   @@unique([inicio, turno])
   @@map("blocos_horario")
+}
+
+model DisponibilidadeBloco {
+  id           String    @id @default(cuid())
+  professorId  String
+  blocoId      String
+  diaSemana    DiaSemana
+  disponivel   Boolean   @default(true)
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
+
+  professor Professor    @relation(fields: [professorId], references: [id])
+  bloco     BlocoHorario @relation(fields: [blocoId], references: [id])
+
+  @@unique([professorId, blocoId, diaSemana])
+  @@map("disponibilidades_bloco")
 }
 
 // ─── Alocações (o coração do sistema) ────────────────────────────────────────
@@ -206,7 +261,7 @@ model Alocacao {
   professorId  String?        // pode ser null (pendente)
   blocoId      String
   diaSemana    DiaSemana
-  online       Boolean        @default(false) // aulas de sábado geralmente online
+  online       Boolean        @default(false)
   status       StatusAlocacao @default(PENDENTE)
   criadoEm     DateTime       @default(now())
   atualizadoEm DateTime       @updatedAt
@@ -224,9 +279,9 @@ model Alocacao {
 model LogAlteracao {
   id          String   @id @default(cuid())
   usuarioId   String
-  entidade    String   // ex: "Alocacao", "Professor"
+  entidade    String   // ex: "Turma", "PeriodoLetivo"
   entidadeId  String
-  campo       String?  // campo alterado
+  campo       String?
   valorAntes  String?
   valorDepois String?
   motivo      String?

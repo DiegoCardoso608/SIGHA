@@ -16,6 +16,7 @@ const atualizarProfessorSchema = z.object({
     .enum(["GRADUADO", "ESPECIALISTA", "MESTRE", "DOUTOR", "DOUTORA", "POS_DOUTOR"])
     .optional(),
   cargaHorariaMax: z.number().int().min(1).max(40).optional(),
+  tipo: z.enum(["TITULAR", "SUBSTITUTO", "RESERVA"]).optional(),
   ativo: z.boolean().optional(),
   novaSenha: z.string().min(6).optional(),
   disciplinaIds: z.array(z.string()).optional(),
@@ -125,6 +126,7 @@ export async function PUT(
     matricula,
     titulacao,
     cargaHorariaMax,
+    tipo,
     ativo,
     novaSenha,
     disciplinaIds,
@@ -165,6 +167,7 @@ export async function PUT(
       email: professorExistente.usuario.email,
       titulacao: professorExistente.titulacao,
       cargaHorariaMax: professorExistente.cargaHorariaMax,
+      tipo: professorExistente.tipo,
       ativo: professorExistente.ativo,
     };
 
@@ -188,6 +191,7 @@ export async function PUT(
     if (titulacao !== undefined) dadosProfessor.titulacao = titulacao;
     if (cargaHorariaMax !== undefined)
       dadosProfessor.cargaHorariaMax = cargaHorariaMax;
+    if (tipo !== undefined) dadosProfessor.tipo = tipo;
     if (ativo !== undefined) dadosProfessor.ativo = ativo;
 
     if (Object.keys(dadosProfessor).length > 0) {
@@ -238,7 +242,7 @@ export async function PUT(
         entidadeId: id,
         campo: "atualizacao",
         valorAntes: JSON.stringify(snapshot),
-        valorDepois: JSON.stringify({ nome, email, titulacao, cargaHorariaMax, ativo }),
+        valorDepois: JSON.stringify({ nome, email, titulacao, cargaHorariaMax, tipo, ativo }),
         motivo: motivo ?? "Atualização de dados do professor",
       },
     });
@@ -251,6 +255,7 @@ export async function PUT(
         },
         disciplinas: { include: { disciplina: true } },
         disponibilidades: true,
+        disponibilidadesBloco: true,
       },
     });
   });

@@ -28,6 +28,7 @@ const TITULACAO_COR: Record<string, string> = {
 interface Professor {
   id: string;
   titulacao: string;
+  tipo?: "TITULAR" | "SUBSTITUTO" | "RESERVA";
   cargaHorariaMax: number;
   ativo: boolean;
   criadoEm: string;

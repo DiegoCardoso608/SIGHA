@@ -19,6 +19,7 @@ export type Professor = {
   email: string
   matricula: string
   titulacao: string
+  tipo?: 'TITULAR' | 'SUBSTITUTO' | 'RESERVA'
   cargaHorariaMax: number
   ativo: boolean
   criadoEm: string
@@ -32,6 +33,7 @@ export type ProfessorPayload = {
   email: string
   matricula: string
   titulacao: string
+  tipo?: 'TITULAR' | 'SUBSTITUTO' | 'RESERVA'
   cargaHorariaMax: number
   senha?: string
   disciplinaIds?: string[]

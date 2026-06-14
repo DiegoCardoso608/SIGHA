@@ -22,6 +22,7 @@ const criarProfessorSchema = z.object({
     "POS_DOUTOR",
   ]),
   cargaHorariaMax: z.number().int().min(1).max(40),
+  tipo: z.enum(["TITULAR", "SUBSTITUTO", "RESERVA"]).optional().default("TITULAR"),
   disciplinaIds: z.array(z.string()).optional().default([]),
   disponibilidades: z
     .array(
@@ -153,7 +154,8 @@ export async function POST(req: NextRequest) {
     matricula,
     senhaInicial,
     titulacao,
-    cargaHorariaMax,
+  cargaHorariaMax,
+    tipo,
     disciplinaIds,
     disponibilidades,
   } = parsed.data;
@@ -201,6 +203,7 @@ export async function POST(req: NextRequest) {
         usuarioId: usuario.id,
         titulacao,
         cargaHorariaMax,
+        tipo,
         ativo: true,
       },
     });
@@ -236,7 +239,7 @@ export async function POST(req: NextRequest) {
         entidadeId: prof.id,
         campo: "criacao",
         valorAntes: null,
-        valorDepois: JSON.stringify({ nome, email, titulacao, cargaHorariaMax }),
+        valorDepois: JSON.stringify({ nome, email, titulacao, cargaHorariaMax, tipo }),
         motivo: "Cadastro de novo professor",
       },
     });
@@ -249,6 +252,7 @@ export async function POST(req: NextRequest) {
         },
         disciplinas: { include: { disciplina: true } },
         disponibilidades: true,
+        disponibilidadesBloco: true,
       },
     });
   });

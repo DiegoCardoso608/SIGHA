@@ -32,6 +32,12 @@ const TURNOS = [
   { value: "NOITE", label: "Noite" },
 ] as const;
 
+const TIPOS_PROFESSOR = [
+  { value: "TITULAR", label: "Titular" },
+  { value: "SUBSTITUTO", label: "Substituto" },
+  { value: "RESERVA", label: "Reserva" },
+] as const;
+
 type DiaSemana = (typeof DIAS_SEMANA)[number]["value"];
 type Turno = (typeof TURNOS)[number]["value"];
 
@@ -44,6 +50,7 @@ interface Disciplina {
 interface ProfessorParaEdicao {
   id: string;
   titulacao: string;
+  tipo?: "TITULAR" | "SUBSTITUTO" | "RESERVA";
   cargaHorariaMax: number;
   ativo: boolean;
   usuario: {
@@ -83,6 +90,7 @@ const schema = z
       .int()
       .min(1, "Mínimo 1 hora")
       .max(40, "Máximo 40 horas"),
+    tipo: z.enum(["TITULAR", "SUBSTITUTO", "RESERVA"] as const),
     disciplinaIds: z.array(z.string()),
     disponibilidades: z
       .array(
@@ -139,6 +147,7 @@ export function ProfessorModal({
       matricula: "",
       senhaInicial: "",
       titulacao: "GRADUADO",
+      tipo: "TITULAR",
       cargaHorariaMax: 20,
       disciplinaIds: [],
       disponibilidades: [],
@@ -169,6 +178,7 @@ export function ProfessorModal({
         matricula: professor.usuario.matricula ?? "",
         senhaInicial: "",
         titulacao: professor.titulacao as FormData["titulacao"],
+        tipo: professor.tipo ?? "TITULAR",
         cargaHorariaMax: professor.cargaHorariaMax,
         disciplinaIds: professor.disciplinas.map((d) => d.disciplina.id),
         disponibilidades: professor.disponibilidades,
@@ -180,6 +190,7 @@ export function ProfessorModal({
         matricula: "",
         senhaInicial: "",
         titulacao: "GRADUADO",
+        tipo: "TITULAR",
         cargaHorariaMax: 20,
         disciplinaIds: [],
         disponibilidades: [],
@@ -249,6 +260,7 @@ export function ProfessorModal({
             email: data.email,
             matricula: data.matricula || null,
             titulacao: data.titulacao,
+            tipo: data.tipo,
             cargaHorariaMax: data.cargaHorariaMax,
             disciplinaIds: data.disciplinaIds,
             disponibilidades: data.disponibilidades,
@@ -260,6 +272,7 @@ export function ProfessorModal({
             matricula: data.matricula || undefined,
             senhaInicial: data.senhaInicial || "sigha@2026",
             titulacao: data.titulacao,
+            tipo: data.tipo,
             cargaHorariaMax: data.cargaHorariaMax,
             disciplinaIds: data.disciplinaIds,
             disponibilidades: data.disponibilidades,
