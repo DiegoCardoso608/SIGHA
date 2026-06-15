@@ -46,6 +46,10 @@ export async function GET(
 ) {
   const { id } = await params;
   const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  }
+
   const professor = await prisma.professor.findUnique({
     where: { id },
     include: {

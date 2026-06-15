@@ -2,7 +2,7 @@
 
 // components/professores/ProfessorModal.tsx
 import { useEffect, useState } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
@@ -71,8 +71,7 @@ interface ProfessorModalProps {
 
 // ─── Schema de validação ──────────────────────────────────────────────────────
 
-const schema = z
-  .object({
+const schema = z.object({
     nome: z.string().min(3, "Nome deve ter ao menos 3 caracteres"),
     email: z.string().email("E-mail inválido"),
     matricula: z.string().optional(),
@@ -106,14 +105,7 @@ const schema = z
           turno: z.enum(["MANHA", "TARDE", "NOITE"] as const),
         })
       ),
-  })
-  .refine(
-    (data) => {
-      // Senha obrigatória apenas na criação (sem professor passado)
-      return true;
-    },
-    { message: "" }
-  );
+  });
 
 type FormData = z.infer<typeof schema>;
 
@@ -128,13 +120,13 @@ export function ProfessorModal({
   const editando = !!professor;
   const [disciplinas, setDisciplinas] = useState<Disciplina[]>([]);
   const [carregandoDisciplinas, setCarregandoDisciplinas] = useState(false);
+  const [erroDisciplinas, setErroDisciplinas] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
-    control,
     reset,
     watch,
     setValue,
@@ -161,10 +153,36 @@ export function ProfessorModal({
   useEffect(() => {
     if (!aberto) return;
     setCarregandoDisciplinas(true);
-    fetch("/api/disciplinas?porPagina=100")
-      .then((r) => r.json())
-      .then((json) => setDisciplinas(json.data ?? []))
-      .catch(() => setDisciplinas([]))
+    setErroDisciplinas(null);
+    fetch("/api/disciplinas?status=ativo&limit=100")
+      .then(async (res) => {
+        const json = await res.json();
+        if (!res.ok) {
+          throw new Error(json.error ?? "Erro ao carregar disciplinas");
+        }
+
+        const lista = Array.isArray(json.disciplinas)
+          ? json.disciplinas
+          : Array.isArray(json.data)
+            ? json.data
+            : [];
+
+        setDisciplinas(
+          lista.map((disciplina: Disciplina) => ({
+            id: disciplina.id,
+            codigo: disciplina.codigo,
+            nome: disciplina.nome,
+          }))
+        );
+      })
+      .catch((error) => {
+        setDisciplinas([]);
+        setErroDisciplinas(
+          error instanceof Error
+            ? error.message
+            : "Nao foi possivel carregar as disciplinas"
+        );
+      })
       .finally(() => setCarregandoDisciplinas(false));
   }, [aberto]);
 
@@ -218,10 +236,14 @@ export function ProfessorModal({
     if (existe) {
       setValue(
         "disponibilidades",
-        atual.filter((d) => !(d.diaSemana === diaSemana && d.turno === turno))
+        atual.filter((d) => !(d.diaSemana === diaSemana && d.turno === turno)),
+        { shouldDirty: true, shouldValidate: true }
       );
     } else {
-      setValue("disponibilidades", [...atual, { diaSemana, turno }]);
+      setValue("disponibilidades", [...atual, { diaSemana, turno }], {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
     }
   };
 
@@ -236,10 +258,14 @@ export function ProfessorModal({
     if (atual.includes(id)) {
       setValue(
         "disciplinaIds",
-        atual.filter((d) => d !== id)
+        atual.filter((d) => d !== id),
+        { shouldDirty: true, shouldValidate: true }
       );
     } else {
-      setValue("disciplinaIds", [...atual, id]);
+      setValue("disciplinaIds", [...atual, id], {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
     }
   };
 
@@ -457,6 +483,25 @@ export function ProfessorModal({
                     <p className="text-xs text-red-500 mt-1">{errors.cargaHorariaMax.message}</p>
                   )}
                 </div>
+
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">
+                    Tipo <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    {...register("tipo")}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white"
+                  >
+                    {TIPOS_PROFESSOR.map((tipo) => (
+                      <option key={tipo.value} value={tipo.value}>
+                        {tipo.label}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.tipo && (
+                    <p className="text-xs text-red-500 mt-1">{errors.tipo.message}</p>
+                  )}
+                </div>
               </div>
             </section>
 
@@ -525,6 +570,10 @@ export function ProfessorModal({
               {carregandoDisciplinas ? (
                 <div className="text-sm text-gray-400 text-center py-6">
                   Carregando disciplinas...
+                </div>
+              ) : erroDisciplinas ? (
+                <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg text-center py-4 px-3">
+                  {erroDisciplinas}
                 </div>
               ) : (
                 <div className="border border-gray-100 rounded-lg max-h-48 overflow-y-auto">

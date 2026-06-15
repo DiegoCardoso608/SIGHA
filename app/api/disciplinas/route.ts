@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
   const status = searchParams.get('status') ?? 'todos' // todos | ativo | inativo
   const cursoId = searchParams.get('cursoId') ?? ''
   const page = Math.max(1, Number(searchParams.get('page') ?? '1'))
-  const limit = Math.min(50, Math.max(1, Number(searchParams.get('limit') ?? '15')))
+  const limit = Math.min(200, Math.max(1, Number(searchParams.get('limit') ?? '15')))
   const skip = (page - 1) * limit
 
   // ── Filtro WHERE ──────────────────────────────────────────────────────────
