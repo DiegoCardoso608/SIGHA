@@ -92,6 +92,7 @@ interface GrupoCandidato {
   diaSemana: DiaSemana
   blocos: BlocoHorario[]
   pontuacao: number
+  hasUltimo?: boolean
 }
 
 interface EstadoAlocacao {
@@ -135,6 +136,9 @@ const DIAS_PRIORIDADE_ONLINE: DiaSemana[] = ['SABADO', 'SEXTA', 'QUINTA', 'QUART
 
 const SEMANAS_LETIVAS_PADRAO = 20
 const prioridadeTipo: Record<string, number> = { TITULAR: 0, SUBSTITUTO: 1, RESERVA: 2 }
+
+// Sprint 8.3: configuração institucional — permitir presencial no sábado
+const PERMITIR_PRESENCIAL_SABADO = false
 
 // ─── Helpers básicos ──────────────────────────────────────────────────────────
 
@@ -411,7 +415,12 @@ function gerarCandidatosParaDisciplina({
 
   for (const professor of professoresAutorizados) {
     const slotsProf = slotsDisponivelsProfessor(professor, blocos)
-    for (const dia of isOnline ? DIAS_PRIORIDADE_ONLINE : [...DIAS_UTEIS, 'SABADO' as DiaSemana]) {
+    const diasCandidatos = isOnline
+      ? DIAS_PRIORIDADE_ONLINE
+      : PERMITIR_PRESENCIAL_SABADO
+      ? [...DIAS_UTEIS, 'SABADO' as DiaSemana]
+      : [...DIAS_UTEIS]
+    for (const dia of diasCandidatos) {
       const blocosProfDia = slotsProf.filter((s) => s.diaSemana === dia && turnoCompativel(turma.turno, s.bloco.turno)).map((s) => s.bloco)
       if (blocosProfDia.length === 0) continue
       // tentar grupos de 1..necessidade
@@ -420,8 +429,11 @@ function gerarCandidatosParaDisciplina({
         if (!grupo) continue
         const pontuacao = pontuarGrupo({ turmaId: turma.id, professorId: professor.id, diaSemana: dia, blocos: grupo, estado, isOnline })
         const key = `${professor.id}|${dia}`
+        // sinalizar se o grupo usa o ultimo bloco do turno
+        const ordemMax = Math.max(...blocosTurno.map((b) => b.ordem))
+        const hasUltimo = grupo.some((b) => b.ordem === ordemMax)
         if (!candidatosPorProfessorDia.has(key)) candidatosPorProfessorDia.set(key, [])
-        candidatosPorProfessorDia.get(key)!.push({ professorId: professor.id, professorNome: professor.usuario.nome, professor, diaSemana: dia, blocos: grupo, pontuacao })
+        candidatosPorProfessorDia.get(key)!.push({ professorId: professor.id, professorNome: professor.usuario.nome, professor, diaSemana: dia, blocos: grupo, pontuacao, hasUltimo })
       }
     }
   }
@@ -430,62 +442,67 @@ function gerarCandidatosParaDisciplina({
 }
 
 // Combina candidatos (grupos) para formar um plano completo cobrindo a necessidade
-function escolherMelhorPlano({ necessidade, candidatosPorProfessorDia, estado, turmaId }: { necessidade: number; candidatosPorProfessorDia: Map<string, GrupoCandidato[]>; estado: EstadoAlocacao; turmaId: string }) {
-  const candidatosList = Array.from(candidatosPorProfessorDia.values()).flat()
-  // backtracking combinar grupos sem sobreposição de slots
+function escolherMelhorPlano({ necessidade, candidatosPorProfessorDia, estado, turmaId, isOnline }: { necessidade: number; candidatosPorProfessorDia: Map<string, GrupoCandidato[]>; estado: EstadoAlocacao; turmaId: string; isOnline: boolean }) {
+  const allCandidates = Array.from(candidatosPorProfessorDia.values()).flat()
   let melhorPlano: GrupoCandidato[] = []
   let melhorScore = -Infinity
 
-  function slotsToSet(grupos: GrupoCandidato[]) {
-    const s = new Set<string>()
-    for (const g of grupos) for (const b of g.blocos) s.add(chaveSlot(b.id, g.diaSemana))
-    return s
+  function trySearch(candidatosList: GrupoCandidato[]) {
+    function backtrack(start: number, chosen: GrupoCandidato[], chosenSlots: Set<string>) {
+      const totalAulas = chosen.reduce((acc, g) => acc + g.blocos.length, 0)
+      if (totalAulas === necessidade) {
+        // pontuar plano com penalidades adicionais (fragmentação, compactacao docente, ocupacao vertical)
+        let score = chosen.reduce((acc, g) => acc + g.pontuacao, 0)
+        // fragmentação: penalizar número de dias usados
+        const diasUsados = new Set(chosen.map((g) => g.diaSemana)).size
+        score -= (diasUsados - 1) * PENALIDADE_FRAGMENTACAO_BASE
+        // compactacao docente: penalizar número de dias distintos por professor
+        const profDias = new Map<string, Set<DiaSemana>>() as any
+        for (const g of chosen) {
+          if (!profDias.has(g.professorId)) profDias.set(g.professorId, new Set())
+          profDias.get(g.professorId).add(g.diaSemana)
+        }
+        for (const [_, ds] of profDias) score -= (ds.size - 1) * 10
+        // ocupacao vertical: bonus se usar dias já presentes no estado.diasTurma
+        for (const d of new Set(chosen.map((g) => g.diaSemana))) {
+          if ((estado.diasTurma.get(turmaId)?.get(d) ?? 0) > 0) score += BONUS_OCUPACAO_VERTICAL
+        }
+
+        if (score > melhorScore) {
+          melhorScore = score
+          melhorPlano = [...chosen]
+        }
+        return
+      }
+      if (totalAulas > necessidade) return
+
+      for (let i = start; i < candidatosList.length; i++) {
+        const c = candidatosList[i]
+        const overlap = c.blocos.some((b) => chosenSlots.has(chaveSlot(b.id, c.diaSemana)))
+        if (overlap) continue
+        const addedSlots = c.blocos.map((b) => chaveSlot(b.id, c.diaSemana))
+        for (const s of addedSlots) chosenSlots.add(s)
+        chosen.push(c)
+        backtrack(i + 1, chosen, chosenSlots)
+        chosen.pop()
+        for (const s of addedSlots) chosenSlots.delete(s)
+      }
+    }
+
+    backtrack(0, [], new Set())
   }
 
-  function backtrack(start: number, chosen: GrupoCandidato[], chosenSlots: Set<string>) {
-    const totalAulas = chosen.reduce((acc, g) => acc + g.blocos.length, 0)
-    if (totalAulas === necessidade) {
-      // pontuar plano com penalidades adicionais (fragmentação, compactacao docente, ocupacao vertical)
-      let score = chosen.reduce((acc, g) => acc + g.pontuacao, 0)
-      // fragmentação: penalizar número de dias usados
-      const diasUsados = new Set(chosen.map((g) => g.diaSemana)).size
-      score -= (diasUsados - 1) * PENALIDADE_FRAGMENTACAO_BASE
-      // compactacao docente: penalizar número de dias distintos por professor
-      const profDias = new Map<string, Set<DiaSemana>>() as any
-      for (const g of chosen) {
-        if (!profDias.has(g.professorId)) profDias.set(g.professorId, new Set())
-        profDias.get(g.professorId).add(g.diaSemana)
-      }
-      for (const [_, ds] of profDias) score -= (ds.size - 1) * 10
-      // ocupacao vertical: bonus se usar dias já presentes no estado.diasTurma
-      for (const d of new Set(chosen.map((g) => g.diaSemana))) {
-        if ((estado.diasTurma.get(turmaId)?.get(d) ?? 0) > 0) score += BONUS_OCUPACAO_VERTICAL
-      }
-
-      if (score > melhorScore) {
-        melhorScore = score
-        melhorPlano = [...chosen]
-      }
-      return
-    }
-    if (totalAulas > necessidade) return
-
-    for (let i = start; i < candidatosList.length; i++) {
-      const c = candidatosList[i]
-      const overlap = c.blocos.some((b) => chosenSlots.has(chaveSlot(b.id, c.diaSemana)))
-      if (overlap) continue
-      // professor carga check can be deferred; assume validated earlier
-      // choose
-      const addedSlots = c.blocos.map((b) => chaveSlot(b.id, c.diaSemana))
-      for (const s of addedSlots) chosenSlots.add(s)
-      chosen.push(c)
-      backtrack(i + 1, chosen, chosenSlots)
-      chosen.pop()
-      for (const s of addedSlots) chosenSlots.delete(s)
-    }
+  // If EAD, first try plans restricted to Saturday and last-block candidates
+  if (isOnline) {
+    const preferenciais = allCandidates.filter((c) => c.diaSemana === 'SABADO' || c.hasUltimo)
+    if (preferenciais.length > 0) trySearch(preferenciais)
+    // if no valid plan found among preferenciais, fall back to all candidates
+    if (melhorScore === -Infinity) trySearch(allCandidates)
+  } else {
+    // presencial: just search all candidates (Saturday excluded by generation)
+    trySearch(allCandidates)
   }
 
-  backtrack(0, [], new Set())
   return { melhorPlano, melhorScore }
 }
 
@@ -546,7 +563,7 @@ function alocarDisciplinaCompleta(opcao: OpcaoAloc): SaidaAloc {
     return { alocadas: [], pendencias, registros: [] }
   }
 
-  const { melhorPlano } = escolherMelhorPlano({ necessidade, candidatosPorProfessorDia, estado, turmaId: turma.id })
+  const { melhorPlano } = escolherMelhorPlano({ necessidade, candidatosPorProfessorDia, estado, turmaId: turma.id, isOnline })
 
   // Aplicar melhorPlano ao estado e gerar registros
   for (const g of melhorPlano) {
