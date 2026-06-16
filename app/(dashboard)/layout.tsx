@@ -69,6 +69,13 @@ export default function DashboardLayout({
             >
               Disponibilidades
             </a>
+            <hr className="my-2" />
+            <a
+              href="/grade"
+              className="block px-4 py-2 text-gray-700 hover:bg-primary-bg hover:text-primary rounded-lg transition-colors font-medium"
+            >
+              Grade
+            </a>
             <a
               href="/alocacoes"
               className="block px-4 py-2 text-gray-700 hover:bg-primary-bg hover:text-primary rounded-lg transition-colors"

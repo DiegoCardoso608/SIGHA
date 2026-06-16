@@ -48,7 +48,7 @@ function PaginationControls({
       </button>
       {getPages().map((p, i) =>
         p === '...' ? (
-          <span key={`ellipsis-${i}`} className="px-2 text-gray-400">
+          <span key={`ellipsis-${i}`} className="px-2 text-gray-700">
             ...
           </span>
         ) : (
@@ -139,8 +139,8 @@ export default function DisciplinasPage() {
   return (
     <div className="min-h-screen bg-[#f5f5f5] p-6">
       {/* Breadcrumb */}
-      <p className="text-sm text-gray-500 mb-1">
-        Coordenação <span className="text-gray-400 mx-1">›</span>{' '}
+      <p className="text-sm text-gray-700 mb-1">
+        Coordenação <span className="text-gray-700 mx-1">›</span>{' '}
         <span className="text-gray-800">Disciplinas</span>
       </p>
 
@@ -178,7 +178,7 @@ export default function DisciplinasPage() {
           </select>
 
           {pagination.total > 0 && (
-            <span className="text-sm text-gray-500 ml-auto">
+            <span className="text-sm text-gray-700 ml-auto">
               {pagination.total} disciplina{pagination.total !== 1 ? 's' : ''}
             </span>
           )}
@@ -188,31 +188,31 @@ export default function DisciplinasPage() {
         {error ? (
           <div className="px-4 py-8 text-center text-red-600 text-sm">{error}</div>
         ) : loading ? (
-          <div className="px-4 py-12 text-center text-gray-400 text-sm">Carregando...</div>
+          <div className="px-4 py-12 text-center text-gray-700 text-sm">Carregando...</div>
         ) : disciplinas.length === 0 ? (
-          <div className="px-4 py-12 text-center text-gray-400 text-sm">
+          <div className="px-4 py-12 text-center text-gray-700 text-sm">
             {search ? 'Nenhuma disciplina encontrada para esta busca.' : 'Nenhuma disciplina cadastrada.'}
           </div>
         ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[#ddd] bg-[#f5f5f5]">
-                <th className="text-left px-4 py-3 text-xs font-medium tracking-widest text-gray-500 uppercase">
+                <th className="text-left px-4 py-3 text-xs font-medium tracking-widest text-gray-700 uppercase">
                   Código
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-medium tracking-widest text-gray-500 uppercase">
+                <th className="text-left px-4 py-3 text-xs font-medium tracking-widest text-gray-700 uppercase">
                   Nome
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-medium tracking-widest text-gray-500 uppercase">
+                <th className="text-left px-4 py-3 text-xs font-medium tracking-widest text-gray-700 uppercase">
                   C.H.
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-medium tracking-widest text-gray-500 uppercase">
+                <th className="text-left px-4 py-3 text-xs font-medium tracking-widest text-gray-700 uppercase">
                   Cursos
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-medium tracking-widest text-gray-500 uppercase">
+                <th className="text-left px-4 py-3 text-xs font-medium tracking-widest text-gray-700 uppercase">
                   Professores
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-medium tracking-widest text-gray-500 uppercase">
+                <th className="text-left px-4 py-3 text-xs font-medium tracking-widest text-gray-700 uppercase">
                   Status
                 </th>
                 <th className="px-4 py-3" />
@@ -226,17 +226,17 @@ export default function DisciplinasPage() {
                     !d.ativo ? 'opacity-60' : ''
                   } ${i % 2 === 0 ? '' : 'bg-[#fafafa]'}`}
                 >
-                  <td className="px-4 py-3 font-mono text-xs text-gray-600 whitespace-nowrap">
+                  <td className="px-4 py-3 font-mono text-xs text-gray-900 whitespace-nowrap">
                     {d.codigo}
                   </td>
-                  <td className="px-4 py-3 text-[#333] font-medium">{d.nome}</td>
-                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                  <td className="px-4 py-3 text-gray-900 font-medium">{d.nome}</td>
+                  <td className="px-4 py-3 text-gray-900 whitespace-nowrap">
                     {d.cargaHoraria}h
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
                       {d.cursos.length === 0 ? (
-                        <span className="text-gray-400 text-xs italic">—</span>
+                        <span className="text-gray-700 text-xs italic">—</span>
                       ) : (
                         d.cursos.map((cd) => (
                           <span
@@ -252,9 +252,9 @@ export default function DisciplinasPage() {
                   </td>
                   <td className="px-4 py-3">
                       {d.professores.length === 0 ? (
-                        <span className="text-xs text-gray-400 italic">Sem professores</span>
+                        <span className="text-xs text-gray-700 italic">Sem professores</span>
                       ) : (
-                        <span className="text-xs text-gray-600">
+                        <span className="text-xs text-gray-900">
                           {d.professores.length} prof.
                       </span>
                     )}
@@ -265,7 +265,7 @@ export default function DisciplinasPage() {
                         Ativo
                       </span>
                     ) : (
-                      <span className="bg-[#f5f5f5] text-gray-500 border border-[#ddd] text-xs px-3 py-0.5 rounded-full">
+                      <span className="bg-[#f5f5f5] text-gray-700 border border-[#ddd] text-xs px-3 py-0.5 rounded-full">
                         Inativo
                       </span>
                     )}
@@ -288,7 +288,7 @@ export default function DisciplinasPage() {
                       ) : (
                         <button
                           onClick={() => handleReativar(d)}
-                          className="text-xs text-gray-500 hover:text-[#2e7d32] font-medium"
+                          className="text-xs text-gray-700 hover:text-[#2e7d32] font-medium"
                         >
                           Reativar
                         </button>

@@ -24,3 +24,37 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Improve placeholder and disabled input contrast across the app */
+input::placeholder,
+textarea::placeholder {
+  color: #9CA3AF; /* tailwind gray-400 */
+  opacity: 1; /* ensure the placeholder is fully visible */
+}
+
+input:disabled,
+textarea:disabled,
+select:disabled {
+  color: #6B7280; /* tailwind gray-500 */
+  background-color: #f9fafb;
+}
+
+/* Stronger defaults to avoid inherited white text in modals/dropdowns */
+input,
+textarea,
+select,
+button,
+option {
+  color: #374151 !important; /* tailwind gray-700 */
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #9CA3AF !important; /* ensure placeholder overrides other rules */
+  opacity: 1 !important;
+}
+
+select option {
+  background: #ffffff !important;
+  color: #374151 !important;
+}

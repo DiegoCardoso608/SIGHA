@@ -19,7 +19,7 @@ const TURNO_LABELS: Record<Turno, string> = { MANHA: 'Manhã', TARDE: 'Tarde', N
 const STATUS_PERIODO = {
   PLANEJAMENTO: { label: 'Planejamento', cls: 'bg-yellow-50 text-yellow-900 border border-yellow-200' },
   ATIVO: { label: 'Ativo', cls: 'bg-[#e8f5e9] text-[#1b5e20] border border-[#a5d6a7]' },
-  FINALIZADO: { label: 'Finalizado', cls: 'bg-gray-100 text-gray-600 border border-gray-300' },
+  FINALIZADO: { label: 'Finalizado', cls: 'bg-gray-100 text-gray-700 border border-gray-300' },
 }
 
 function Badge({ status }: { status: keyof typeof STATUS_PERIODO }) {
@@ -46,21 +46,21 @@ function Pagination({
   return (
     <div className="flex items-center gap-1 justify-center mt-6">
       <button onClick={() => onChange(page - 1)} disabled={page === 1}
-        className="px-3 py-1.5 text-sm rounded border border-[#ddd] text-[#555] hover:bg-gray-50 disabled:opacity-40">
+        className="px-3 py-1.5 text-sm rounded border border-[#ddd] text-gray-700 hover:bg-gray-50 disabled:opacity-40">
         ←
       </button>
       {pages.map((p, i) =>
         p === '...' ? (
-          <span key={`e${i}`} className="px-2 text-[#888]">…</span>
+          <span key={`e${i}`} className="px-2 text-gray-700">…</span>
         ) : (
           <button key={p} onClick={() => onChange(Number(p))}
-            className={`px-3 py-1.5 text-sm rounded border ${p === page ? 'bg-[#2e7d32] text-white border-[#2e7d32]' : 'border-[#ddd] text-[#555] hover:bg-gray-50'}`}>
+            className={`px-3 py-1.5 text-sm rounded border ${p === page ? 'bg-[#2e7d32] text-white border-[#2e7d32]' : 'border-[#ddd] text-gray-700 hover:bg-gray-50'}`}>
             {p}
           </button>
         )
       )}
       <button onClick={() => onChange(page + 1)} disabled={page === totalPages}
-        className="px-3 py-1.5 text-sm rounded border border-[#ddd] text-[#555] hover:bg-gray-50 disabled:opacity-40">
+        className="px-3 py-1.5 text-sm rounded border border-[#ddd] text-gray-700 hover:bg-gray-50 disabled:opacity-40">
         →
       </button>
     </div>
@@ -211,8 +211,8 @@ export default function TurmasPage() {
       <div className="max-w-7xl mx-auto px-6 py-8">
 
         {/* Breadcrumb */}
-        <p className="text-sm text-gray-500 mb-1">
-          Dashboard <span className="text-gray-400 mx-1">›</span>
+        <p className="mb-1 text-sm text-gray-700">
+          Dashboard <span className="text-gray-700 mx-1">›</span>
           <span className="text-gray-800">Turmas</span>
         </p>
 
@@ -242,7 +242,7 @@ export default function TurmasPage() {
         <div className="flex gap-0 mb-6 border-b border-[#ddd]">
           {(['turmas', 'periodos'] as const).map(a => (
             <button key={a} onClick={() => setAba(a)}
-              className={`px-5 py-2.5 text-xs font-medium tracking-wider uppercase border-b-2 transition ${aba === a ? 'text-[#2e7d32] border-[#2e7d32]' : 'text-gray-500 border-transparent hover:text-gray-700'}`}>
+              className={`px-5 py-2.5 text-xs font-medium tracking-wider uppercase border-b-2 transition ${aba === a ? 'text-[#2e7d32] border-[#2e7d32]' : 'text-gray-700 border-transparent hover:text-gray-900'}`}>
               {a === 'turmas' ? 'Turmas' : 'Períodos Letivos'}
             </button>
           ))}
@@ -288,22 +288,22 @@ export default function TurmasPage() {
 
             {/* Tabela */}
             <div className="bg-white border border-[#ddd] rounded-lg overflow-hidden">
-              <div className="px-5 py-3 border-b border-[#ddd] flex items-center justify-between">
-                <span className="text-xs font-medium tracking-widest text-gray-500 uppercase">
-                  {loading ? 'Carregando...' : `${total} turma(s) encontrada(s)`}
-                </span>
-              </div>
+                  <div className="px-5 py-3 border-b border-[#ddd] flex items-center justify-between">
+                    <span className="text-xs font-medium tracking-widest text-gray-700 uppercase">
+                      {loading ? 'Carregando...' : `${total} turma(s) encontrada(s)`}
+                    </span>
+                  </div>
 
               {loading ? (
-                <div className="text-center py-16 text-sm text-[#888]">Carregando turmas...</div>
+                <div className="text-center py-16 text-sm text-gray-700">Carregando turmas...</div>
               ) : turmas.length === 0 ? (
-                <div className="text-center py-16 text-sm text-[#888]">Nenhuma turma encontrada.</div>
+                <div className="text-center py-16 text-sm text-gray-700">Nenhuma turma encontrada.</div>
               ) : (
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-[#ddd] bg-gray-50">
                       {['Código', 'Nome', 'Curso', 'Período Letivo', 'Matriz', 'Turno', 'Alocações', 'Status', ''].map(h => (
-                        <th key={h} className="text-left px-4 py-3 text-xs font-medium tracking-widest text-gray-500 uppercase">
+                        <th key={h} className="text-left px-4 py-3 text-xs font-medium tracking-widest text-gray-700 uppercase">
                           {h}
                         </th>
                       ))}
@@ -312,18 +312,18 @@ export default function TurmasPage() {
                   <tbody>
                     {turmas.map((turma, i) => (
                       <tr key={turma.id} className={`border-b border-[#ddd] hover:bg-gray-50 ${!turma.ativo ? 'opacity-50' : ''}`}>
-                        <td className="px-4 py-3 font-mono text-xs text-[#555]">{turma.codigo}</td>
-                        <td className="px-4 py-3 text-[#333] font-medium">{turma.nome}</td>
-                        <td className="px-4 py-3 text-[#555]">{turma.curso.nome}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-gray-900">{turma.codigo}</td>
+                        <td className="px-4 py-3 text-gray-900 font-medium">{turma.nome}</td>
+                        <td className="px-4 py-3 text-gray-900">{turma.curso.nome}</td>
                         <td className="px-4 py-3">
                           <Badge status={turma.periodoLetivo.status as any} />
-                          <span className="ml-2 text-xs text-[#555]">{turma.periodoLetivo.descricao}</span>
+                          <span className="ml-2 text-xs text-gray-900">{turma.periodoLetivo.descricao}</span>
                         </td>
-                        <td className="px-4 py-3 text-center text-[#555]">{turma.periodo}º</td>
-                        <td className="px-4 py-3 text-[#555]">{TURNO_LABELS[turma.turno]}</td>
-                        <td className="px-4 py-3 text-center text-[#555]">{turma._count?.alocacoes ?? 0}</td>
+                        <td className="px-4 py-3 text-center text-gray-900">{turma.periodo}º</td>
+                        <td className="px-4 py-3 text-gray-900">{TURNO_LABELS[turma.turno]}</td>
+                        <td className="px-4 py-3 text-center text-gray-900">{turma._count?.alocacoes ?? 0}</td>
                         <td className="px-4 py-3">
-                          <span className={`text-xs px-3 py-0.5 rounded-full border ${turma.ativo ? 'bg-[#e8f5e9] text-[#1b5e20] border-[#a5d6a7]' : 'bg-gray-100 text-gray-600 border-gray-300'}`}>
+                          <span className={`text-xs px-3 py-0.5 rounded-full border ${turma.ativo ? 'bg-[#e8f5e9] text-[#1b5e20] border-[#a5d6a7]' : 'bg-gray-100 text-gray-700 border-gray-300'}`}>
                             {turma.ativo ? 'Ativa' : 'Inativa'}
                           </span>
                         </td>
@@ -340,7 +340,7 @@ export default function TurmasPage() {
                               </button>
                             ) : (
                               <button onClick={() => handleReativar(turma)}
-                                className="text-xs text-[#888] hover:underline">
+                                className="text-xs text-gray-700 hover:underline">
                                 Reativar
                               </button>
                             )}
@@ -361,13 +361,13 @@ export default function TurmasPage() {
         {aba === 'periodos' && (
           <div className="bg-white border border-[#ddd] rounded-lg overflow-hidden">
             <div className="px-5 py-3 border-b border-[#ddd]">
-              <span className="text-xs font-medium tracking-widest text-gray-500 uppercase">
+              <span className="text-xs font-medium tracking-widest text-gray-700 uppercase">
                 {loadingPeriodos ? 'Carregando...' : `${periodos.length} período(s) cadastrado(s)`}
               </span>
             </div>
 
             {periodos.length === 0 ? (
-              <div className="text-center py-16 text-sm text-[#888]">
+              <div className="text-center py-16 text-sm text-gray-700">
                 Nenhum período letivo cadastrado. Clique em "+ Período Letivo" para começar.
               </div>
             ) : (
@@ -375,7 +375,7 @@ export default function TurmasPage() {
                 <thead>
                   <tr className="border-b border-[#ddd] bg-gray-50">
                     {['Período', 'Início', 'Fim', 'Turmas', 'Status', ''].map(h => (
-                      <th key={h} className="text-left px-4 py-3 text-xs font-medium tracking-widest text-gray-500 uppercase">{h}</th>
+                      <th key={h} className="text-left px-4 py-3 text-xs font-medium tracking-widest text-gray-700 uppercase">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -383,9 +383,9 @@ export default function TurmasPage() {
                   {periodos.map(p => (
                     <tr key={p.id} className="border-b border-[#ddd] hover:bg-gray-50">
                       <td className="px-4 py-3 font-bold text-[#333] text-base">{p.descricao}</td>
-                      <td className="px-4 py-3 text-[#555]">{new Date(p.dataInicio).toLocaleDateString('pt-BR')}</td>
-                      <td className="px-4 py-3 text-[#555]">{new Date(p.dataFim).toLocaleDateString('pt-BR')}</td>
-                      <td className="px-4 py-3 text-center text-[#555]">{p._count?.turmas ?? '—'}</td>
+                      <td className="px-4 py-3 text-gray-900">{new Date(p.dataInicio).toLocaleDateString('pt-BR')}</td>
+                      <td className="px-4 py-3 text-gray-900">{new Date(p.dataFim).toLocaleDateString('pt-BR')}</td>
+                      <td className="px-4 py-3 text-center text-gray-900">{p._count?.turmas ?? '—'}</td>
                       <td className="px-4 py-3"><Badge status={p.status} /></td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2 justify-end">

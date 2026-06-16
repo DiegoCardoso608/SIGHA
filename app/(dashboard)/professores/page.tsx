@@ -17,7 +17,7 @@ const TITULACAO_LABEL: Record<string, string> = {
 };
 
 const TITULACAO_COR: Record<string, string> = {
-  GRADUADO: "bg-gray-100 text-gray-600",
+  GRADUADO: "bg-gray-100 text-gray-700",
   ESPECIALISTA: "bg-blue-50 text-blue-600",
   MESTRE: "bg-violet-50 text-violet-600",
   DOUTOR: "bg-amber-50 text-amber-700",
@@ -149,7 +149,7 @@ export default function ProfessoresPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Professores</h1>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-gray-700 mt-1">
               {meta.total} professor{meta.total !== 1 ? "es" : ""} cadastrado{meta.total !== 1 ? "s" : ""}
             </p>
           </div>
@@ -170,7 +170,7 @@ export default function ProfessoresPage() {
             {/* Busca */}
             <div className="flex-1 relative">
               <svg
-                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-700"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -189,7 +189,7 @@ export default function ProfessoresPage() {
             <select
               value={filtroTitulacao}
               onChange={(e) => setFiltroTitulacao(e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white min-w-[140px]"
+              className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white min-w-[140px]"
             >
               <option value="">Todas as titulações</option>
               <option value="GRADUADO">Graduado</option>
@@ -215,7 +215,7 @@ export default function ProfessoresPage() {
                   className={`px-3 py-2 transition-colors ${
                     filtroAtivo === op.value
                       ? "bg-green-700 text-white"
-                      : "text-gray-600 hover:bg-gray-50"
+                      : "text-gray-700 hover:bg-gray-50"
                   }`}
                 >
                   {op.label}
@@ -234,18 +234,18 @@ export default function ProfessoresPage() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                 </svg>
-                <span className="text-sm text-gray-400">Carregando professores...</span>
+                <span className="text-sm text-gray-700">Carregando professores...</span>
               </div>
             </div>
           ) : professores.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
-                <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-6 h-6 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
               </div>
-              <p className="text-gray-500 font-medium">Nenhum professor encontrado</p>
-              <p className="text-sm text-gray-400 mt-1">
+              <p className="text-gray-700 font-medium">Nenhum professor encontrado</p>
+              <p className="text-sm text-gray-700 mt-1">
                 {busca || filtroAtivo || filtroTitulacao
                   ? "Tente ajustar os filtros"
                   : "Cadastre o primeiro professor"}
@@ -265,22 +265,22 @@ export default function ProfessoresPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100">
-                      <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      <th className="text-left px-5 py-3 text-xs font-medium text-gray-700 uppercase tracking-wide">
                         Professor
                       </th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-700 uppercase tracking-wide">
                         Titulação
                       </th>
-                      <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      <th className="text-center px-4 py-3 text-xs font-medium text-gray-700 uppercase tracking-wide">
                         CH máx.
                       </th>
-                      <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      <th className="text-center px-4 py-3 text-xs font-medium text-gray-700 uppercase tracking-wide">
                         Disciplinas
                       </th>
-                      <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      <th className="text-center px-4 py-3 text-xs font-medium text-gray-700 uppercase tracking-wide">
                         Alocações
                       </th>
-                      <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      <th className="text-center px-4 py-3 text-xs font-medium text-gray-700 uppercase tracking-wide">
                         Status
                       </th>
                       <th className="px-4 py-3" />
@@ -306,9 +306,9 @@ export default function ProfessoresPage() {
                               <p className="text-sm font-medium text-gray-900">
                                 {prof.usuario.nome}
                               </p>
-                              <p className="text-xs text-gray-400">{prof.usuario.email}</p>
+                              <p className="text-xs text-gray-700">{prof.usuario.email}</p>
                               {prof.usuario.matricula && (
-                                <p className="text-xs text-gray-300 font-mono">
+                                <p className="text-xs text-gray-700 font-mono">
                                   {prof.usuario.matricula}
                                 </p>
                               )}
@@ -320,7 +320,7 @@ export default function ProfessoresPage() {
                         <td className="px-4 py-4">
                           <span
                             className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              TITULACAO_COR[prof.titulacao] ?? "bg-gray-100 text-gray-600"
+                              TITULACAO_COR[prof.titulacao] ?? "bg-gray-100 text-gray-700"
                             }`}
                           >
                             {TITULACAO_LABEL[prof.titulacao] ?? prof.titulacao}
@@ -336,7 +336,7 @@ export default function ProfessoresPage() {
 
                         {/* Disciplinas */}
                         <td className="px-4 py-4 text-center">
-                          <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-100 text-xs font-medium text-gray-600">
+                          <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-100 text-xs font-medium text-gray-700">
                             {prof.disciplinas.length}
                           </span>
                         </td>
@@ -354,7 +354,7 @@ export default function ProfessoresPage() {
                             className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
                               prof.ativo
                                 ? "bg-green-50 text-green-700"
-                                : "bg-gray-100 text-gray-500"
+                                : "bg-gray-100 text-gray-700"
                             }`}
                           >
                             <span
@@ -372,7 +372,7 @@ export default function ProfessoresPage() {
                             <button
                               onClick={() => abrirEdicao(prof)}
                               title="Editar"
-                              className="p-1.5 text-gray-400 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors"
+                              className="p-1.5 text-gray-700 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors"
                             >
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -383,7 +383,7 @@ export default function ProfessoresPage() {
                               <button
                                 onClick={() => abrirDesativar(prof)}
                                 title="Desativar"
-                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                className="p-1.5 text-gray-700 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                               >
                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
@@ -393,7 +393,7 @@ export default function ProfessoresPage() {
                               <button
                                 onClick={() => reativar(prof)}
                                 title="Reativar"
-                                className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                className="p-1.5 text-gray-700 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
                               >
                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -411,7 +411,7 @@ export default function ProfessoresPage() {
               {/* Paginação */}
               {meta.totalPaginas > 1 && (
                 <div className="flex items-center justify-between px-5 py-4 border-t border-gray-100">
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-gray-700">
                     Mostrando {(meta.pagina - 1) * meta.porPagina + 1}–
                     {Math.min(meta.pagina * meta.porPagina, meta.total)} de {meta.total}
                   </p>
@@ -419,7 +419,7 @@ export default function ProfessoresPage() {
                     <button
                       onClick={() => setPagina((p) => Math.max(1, p - 1))}
                       disabled={pagina === 1}
-                      className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
                       Anterior
                     </button>
@@ -438,7 +438,7 @@ export default function ProfessoresPage() {
                       }, [])
                       .map((p, i) =>
                         p === "..." ? (
-                          <span key={`dots-${i}`} className="px-2 text-gray-400 text-sm">
+                          <span key={`dots-${i}`} className="px-2 text-gray-700 text-sm">
                             …
                           </span>
                         ) : (
@@ -448,7 +448,7 @@ export default function ProfessoresPage() {
                             className={`w-8 h-8 text-sm rounded-lg transition-colors ${
                               pagina === p
                                 ? "bg-green-700 text-white"
-                                : "text-gray-600 hover:bg-gray-100"
+                                : "text-gray-700 hover:bg-gray-100"
                             }`}
                           >
                             {p}
@@ -458,7 +458,7 @@ export default function ProfessoresPage() {
                     <button
                       onClick={() => setPagina((p) => Math.min(meta.totalPaginas, p + 1))}
                       disabled={pagina === meta.totalPaginas}
-                      className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
                       Próxima
                     </button>

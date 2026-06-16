@@ -25,6 +25,7 @@ interface Turma {
   turno: string
   periodo: number
   curso: { nome: string }
+  periodoLetivo: { id: string; descricao: string; status: string }
 }
 
 interface BlocoHorario {
@@ -95,7 +96,7 @@ function ResultadoModal({
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Resultado da geracao</h2>
-            <p className="mt-1 text-sm text-gray-600">
+            <p className="mt-1 text-sm text-gray-700">
               {resultado.resumo.alocadas} de {resultado.resumo.total} disciplinas alocadas.
             </p>
           </div>
@@ -125,7 +126,7 @@ function ResultadoModal({
             {resultado.pendencias.map((pendencia, index) => (
               <div key={`${pendencia.turmaId}-${pendencia.disciplinaId}-${index}`} className="rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm">
                 <div className="font-medium text-gray-900">{pendencia.disciplinaNome}</div>
-                <div className="text-xs text-gray-600">{pendencia.turmaNome}</div>
+                <div className="text-xs text-gray-700">{pendencia.turmaNome}</div>
                 <div className="mt-1 text-xs text-yellow-800">{pendencia.motivo}</div>
               </div>
             ))}
@@ -157,11 +158,11 @@ function TrocarProfessorModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
         <h2 className="text-lg font-semibold text-gray-900">Trocar professor</h2>
-        <p className="mt-1 text-sm text-gray-600">
+        <p className="mt-1 text-sm text-gray-700">
           {alocacao.disciplina.nome} em {alocacao.diaSemana}, {alocacao.bloco.inicio}-{alocacao.bloco.fim}
         </p>
 
-        <label className="mt-5 block text-xs font-semibold uppercase text-gray-600">Professor</label>
+        <label className="mt-5 block text-xs font-semibold uppercase text-gray-700">Professor</label>
         <select
           className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-green-700"
           value={professorId}
@@ -210,12 +211,22 @@ export default function AlocacoesPage() {
   const [salvandoProfessor, setSalvandoProfessor] = useState(false)
 
   useEffect(() => {
+    const turmaIdInicial = new URLSearchParams(window.location.search).get('turmaId')
+
     Promise.all([
       fetch('/api/periodos-letivos').then((res) => res.json()),
       fetch('/api/blocos').then((res) => res.json()),
       fetch('/api/professores?ativo=true&porPagina=50').then((res) => res.json()),
-    ]).then(([periodosData, blocosData, professoresData]) => {
+      turmaIdInicial
+        ? fetch('/api/turmas?ativo=true&limit=500').then((res) => res.json())
+        : Promise.resolve({ turmas: [] }),
+    ]).then(([periodosData, blocosData, professoresData, turmasData]) => {
       const listaPeriodos = (periodosData.periodos ?? []) as PeriodoLetivo[]
+      const listaTurmasUrl = (turmasData.turmas ?? []) as Turma[]
+      const turmaUrl = turmaIdInicial
+        ? listaTurmasUrl.find((turma) => turma.id === turmaIdInicial)
+        : undefined
+
       setPeriodos(listaPeriodos)
       setBlocos((blocosData.blocos ?? []) as BlocoHorario[])
       setProfessores(
@@ -226,7 +237,12 @@ export default function AlocacoesPage() {
       )
 
       const periodoPadrao = listaPeriodos.find((periodo) => periodo.status === 'ATIVO') ?? listaPeriodos[0]
-      if (periodoPadrao) setPeriodoSelecionado(periodoPadrao.id)
+      if (turmaUrl) {
+        setPeriodoSelecionado(turmaUrl.periodoLetivo.id)
+        setTurmaSelecionada(turmaUrl.id)
+      } else if (periodoPadrao) {
+        setPeriodoSelecionado(periodoPadrao.id)
+      }
     })
   }, [])
 
@@ -309,12 +325,9 @@ export default function AlocacoesPage() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Alocacoes</h1>
-          <p className="mt-2 text-gray-600">Gere e ajuste a grade de horarios por turma.</p>
-        </div>
-
-        <div className="flex flex-wrap items-end gap-3">
+          <p className="mt-2 text-gray-700">Gere e ajuste a grade de horarios por turma.</p>
           <label className="block">
-            <span className="mb-1 block text-xs font-semibold uppercase text-gray-600">Periodo letivo</span>
+            <span className="mb-1 block text-xs font-semibold uppercase text-gray-700">Periodo letivo</span>
             <select
               className="w-44 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
               value={periodoSelecionado}
@@ -330,7 +343,7 @@ export default function AlocacoesPage() {
           </label>
 
           <label className="block">
-            <span className="mb-1 block text-xs font-semibold uppercase text-gray-600">Turma</span>
+            <span className="mb-1 block text-xs font-semibold uppercase text-gray-700">Turma</span>
             <select
               className="w-56 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
               value={turmaSelecionada}
@@ -378,18 +391,18 @@ export default function AlocacoesPage() {
 
       <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
         {carregando ? (
-          <div className="p-10 text-center text-sm text-gray-500">Carregando grade...</div>
+          <div className="p-10 text-center text-sm text-gray-700">Carregando grade...</div>
         ) : !turmaSelecionada ? (
-          <div className="p-10 text-center text-sm text-gray-500">Selecione uma turma para visualizar a grade.</div>
+          <div className="p-10 text-center text-sm text-gray-700">Selecione uma turma para visualizar a grade.</div>
         ) : (
           <table className="w-full min-w-[880px] border-collapse">
             <thead>
               <tr className="bg-gray-50">
-                <th className="w-28 border-b border-r border-gray-200 p-3 text-left text-xs font-semibold uppercase text-gray-600">
+                <th className="w-28 border-b border-r border-gray-200 p-3 text-left text-xs font-semibold uppercase text-gray-700">
                   Horario
                 </th>
                 {DIAS.map((dia) => (
-                  <th key={dia.key} className="border-b border-r border-gray-200 p-3 text-center text-xs font-semibold uppercase text-gray-600">
+                  <th key={dia.key} className="border-b border-r border-gray-200 p-3 text-center text-xs font-semibold uppercase text-gray-700">
                     {dia.label}
                   </th>
                 ))}
@@ -398,7 +411,7 @@ export default function AlocacoesPage() {
             <tbody>
               {blocosFiltrados.map((bloco) => (
                 <tr key={bloco.id}>
-                  <td className="border-r border-t border-gray-200 p-3 align-top text-xs text-gray-600">
+                  <td className="border-r border-t border-gray-200 p-3 align-top text-xs text-gray-700">
                     <div className="font-semibold">{bloco.inicio}</div>
                     <div>{bloco.fim}</div>
                   </td>

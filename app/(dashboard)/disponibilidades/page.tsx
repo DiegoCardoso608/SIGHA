@@ -58,15 +58,15 @@ export default function DisponibilidadesPage() {
   return (
     <div className="min-h-screen bg-[#f5f5f5]">
       <div className="mx-auto max-w-7xl px-6 py-8">
-        <p className="mb-1 text-sm text-gray-500">
-          Dashboard <span className="mx-1 text-gray-400">&gt;</span>
+        <p className="mb-1 text-sm text-gray-700">
+          Dashboard <span className="mx-1 text-gray-700">&gt;</span>
           <span className="text-gray-800">Disponibilidades</span>
         </p>
 
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-gray-800">Disponibilidades</h1>
-            <p className="mt-1 text-sm text-gray-500">Grade por bloco e cobertura institucional</p>
+            <p className="mt-1 text-sm text-gray-700">Grade por bloco e cobertura institucional</p>
           </div>
           <input
             value={busca}
@@ -82,22 +82,22 @@ export default function DisponibilidadesPage() {
 
         <div className="rounded-lg border border-[#ddd] bg-white">
           <div className="flex items-center justify-between border-b border-[#ddd] px-5 py-3">
-            <span className="text-xs font-medium uppercase tracking-widest text-gray-500">
+            <span className="text-xs font-medium uppercase tracking-widest text-gray-700">
               {loading ? 'Carregando...' : `${professores.length} professor(es)`}
             </span>
           </div>
 
           {loading ? (
-            <div className="py-12 text-center text-sm text-gray-400">Carregando professores...</div>
+            <div className="py-12 text-center text-sm text-gray-700">Carregando professores...</div>
           ) : professores.length === 0 ? (
-            <div className="py-12 text-center text-sm text-gray-400">Nenhum professor encontrado.</div>
+            <div className="py-12 text-center text-sm text-gray-700">Nenhum professor encontrado.</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#ddd] bg-gray-50">
                     {['Professor', 'Tipo', 'Titulacao', 'CH max.', 'Status', ''].map((header) => (
-                      <th key={header} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-widest text-gray-500">
+                      <th key={header} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-widest text-gray-700">
                         {header}
                       </th>
                     ))}
@@ -107,8 +107,8 @@ export default function DisponibilidadesPage() {
                   {professores.map((professor) => (
                     <tr key={professor.id} className="border-b border-[#eee] hover:bg-gray-50">
                       <td className="px-4 py-3">
-                        <p className="font-medium text-[#333]">{professor.usuario.nome}</p>
-                        <p className="text-xs text-gray-500">{professor.usuario.email}</p>
+                        <p className="font-medium text-gray-900">{professor.usuario.nome}</p>
+                        <p className="text-xs text-gray-700">{professor.usuario.email}</p>
                       </td>
                       <td className="px-4 py-3 text-gray-700">{TIPO_LABEL[professor.tipo]}</td>
                       <td className="px-4 py-3 text-gray-700">{professor.titulacao}</td>
