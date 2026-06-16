@@ -7,7 +7,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
@@ -53,6 +52,11 @@ enum Modalidade {
   PRESENCIAL
   EAD
   HIBRIDO
+}
+
+enum ModalidadeDisciplina {
+  PRESENCIAL
+  ONLINE
 }
 
 // NOVO — Sprint 3
@@ -108,6 +112,7 @@ model Disciplina {
   codigo       String   @unique
   nome         String
   cargaHoraria Int
+  modalidade   ModalidadeDisciplina @default(PRESENCIAL)
   ativo        Boolean  @default(true)
   criadoEm     DateTime @default(now())
 

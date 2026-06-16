@@ -23,6 +23,7 @@ export interface Disciplina {
   codigo: string
   nome: string
   cargaHoraria: number
+  modalidade: 'PRESENCIAL' | 'ONLINE'
   ativo: boolean
   cursos: CursoDisciplina[]
   professores: { professor: Professor }[]

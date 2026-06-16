@@ -50,9 +50,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (!existente) return NextResponse.json({ error: 'Período não encontrado' }, { status: 404 })
 
   // Não pode editar período FINALIZADO
-  if (existente.status === 'FINALIZADO' && parsed.data.status !== 'FINALIZADO') {
-    return NextResponse.json({ error: 'Períodos finalizados não podem ser reabertos' }, { status: 422 })
-  }
+  // Permitir mudança de status em qualquer direção — o ciclo de vida é reversível
+  // (anteriormente havia uma restrição que impedia reabertura de períodos finalizados)
 
   const { dataInicio, dataFim, status } = parsed.data
 
@@ -98,15 +97,20 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
 
   if (!periodo) return NextResponse.json({ error: 'Período não encontrado' }, { status: 404 })
 
-  if (periodo._count.turmas > 0) {
-    return NextResponse.json(
-      { error: `Não é possível excluir: existem ${periodo._count.turmas} turma(s) vinculada(s)` },
-      { status: 422 }
-    )
+
+  // Verifica dependências antes de excluir: turmas e alocações
+  const turmas = await prisma.turma.findMany({ where: { periodoLetivoId: id }, select: { id: true } })
+  const turmaIds = turmas.map((t) => t.id)
+  let alocacoesCount = 0
+  if (turmaIds.length > 0) {
+    alocacoesCount = await prisma.alocacao.count({ where: { turmaId: { in: turmaIds } } })
   }
 
-  if (periodo.status === 'ATIVO') {
-    return NextResponse.json({ error: 'Não é possível excluir um período letivo ativo' }, { status: 422 })
+  if (turmas.length > 0 || alocacoesCount > 0) {
+    const parts: string[] = []
+    if (turmas.length > 0) parts.push(`existem ${turmas.length} turma(s) vinculada(s)`)
+    if (alocacoesCount > 0) parts.push(`existem ${alocacoesCount} alocação(ões) vinculada(s)`)
+    return NextResponse.json({ error: `Não é possível excluir: ${parts.join(' e ')}` }, { status: 422 })
   }
 
   await prisma.periodoLetivo.delete({ where: { id } })

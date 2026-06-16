@@ -35,6 +35,7 @@ interface Disciplina {
   codigo: string
   nome: string
   cargaHoraria: number
+  modalidade: 'PRESENCIAL' | 'ONLINE'
   ativo: boolean
   cursos: CursoDisciplina[]
   professores?: { professor: Professor }[]
@@ -56,6 +57,7 @@ const formSchema = z.object({
     .int()
     .min(1)
     .max(500),
+  modalidade: z.enum(['PRESENCIAL', 'ONLINE']),
   cursos: z.array(
     z.object({
       cursoId: z.string().min(1, 'Selecione o curso'),
@@ -91,6 +93,7 @@ export default function DisciplinaModal({
       codigo: disciplina?.codigo ?? '',
       nome: disciplina?.nome ?? '',
       cargaHoraria: disciplina?.cargaHoraria ?? undefined,
+      modalidade: disciplina?.modalidade ?? 'PRESENCIAL',
       cursos: disciplina?.cursos.map((cd) => ({
         cursoId: cd.cursoId,
         periodo: cd.periodo,
@@ -222,6 +225,35 @@ export default function DisciplinaModal({
                 />
                 {errors.nome && (
                   <p className="text-red-500 text-xs mt-1">{errors.nome.message}</p>
+                )}
+              </div>
+
+              <div className="col-span-2">
+                <label className="block text-sm text-gray-700 mb-1">
+                  Modalidade <span className="text-red-500">*</span>
+                </label>
+                <div className="flex items-center gap-6">
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      {...register('modalidade')}
+                      type="radio"
+                      value="PRESENCIAL"
+                      className="accent-[#2e7d32]"
+                    />
+                    Presencial
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      {...register('modalidade')}
+                      type="radio"
+                      value="ONLINE"
+                      className="accent-[#2e7d32]"
+                    />
+                    Online
+                  </label>
+                </div>
+                {errors.modalidade && (
+                  <p className="text-red-500 text-xs mt-1">{errors.modalidade.message}</p>
                 )}
               </div>
             </div>

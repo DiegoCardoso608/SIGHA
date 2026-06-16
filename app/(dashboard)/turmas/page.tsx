@@ -204,6 +204,17 @@ export default function TurmasPage() {
     }
   }
 
+  const handleChangePeriodoStatus = async (p: PeriodoLetivo, novoStatus: 'PLANEJAMENTO' | 'ATIVO' | 'FINALIZADO') => {
+    const confirmMsg = `Alterar status de ${p.descricao} para ${novoStatus}?`;
+    if (!confirm(confirmMsg)) return
+    try {
+      await updatePeriodo(p.id, { status: novoStatus })
+      mostrarFeedback('ok', `Período ${p.descricao} agora está ${novoStatus.toLowerCase()}.`)
+    } catch (e: any) {
+      mostrarFeedback('erro', e.message)
+    }
+  }
+
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
@@ -391,7 +402,23 @@ export default function TurmasPage() {
                         <div className="flex items-center gap-2 justify-end">
                           <button onClick={() => handleEditarPeriodo(p)} className="text-xs text-[#2e7d32] hover:underline">Editar</button>
                           {p.status === 'PLANEJAMENTO' && (
-                            <button onClick={() => handleExcluirPeriodo(p)} className="text-xs text-[#e53935] hover:underline">Excluir</button>
+                            <>
+                              <button onClick={() => handleChangePeriodoStatus(p, 'ATIVO')} className="text-xs text-[#1976d2] hover:underline">Ativar</button>
+                              <button onClick={() => handleExcluirPeriodo(p)} className="text-xs text-[#e53935] hover:underline">Excluir</button>
+                            </>
+                          )}
+                          {p.status === 'ATIVO' && (
+                            <>
+                              <button onClick={() => handleChangePeriodoStatus(p, 'FINALIZADO')} className="text-xs text-[#e65100] hover:underline">Finalizar</button>
+                              <button onClick={() => handleChangePeriodoStatus(p, 'PLANEJAMENTO')} className="text-xs text-[#6b7280] hover:underline">Retornar para Planejamento</button>
+                            </>
+                          )}
+                          {p.status === 'FINALIZADO' && (
+                            <>
+                              <button onClick={() => handleChangePeriodoStatus(p, 'ATIVO')} className="text-xs text-[#2e7d32] hover:underline">Reativar</button>
+                              <button onClick={() => handleChangePeriodoStatus(p, 'PLANEJAMENTO')} className="text-xs text-[#6b7280] hover:underline">Retornar para Planejamento</button>
+                              <button onClick={() => handleExcluirPeriodo(p)} className="text-xs text-[#e53935] hover:underline">Excluir</button>
+                            </>
                           )}
                         </div>
                       </td>

@@ -23,6 +23,8 @@ interface Props {
   onClose: () => void
   onSubmit: (data: FormData) => Promise<void>
   periodo?: PeriodoLetivo | null
+  onDelete?: (id: string) => Promise<void>
+  onChangeStatus?: (id: string, status: FormData['status']) => Promise<void>
 }
 
 const STATUS_LABELS = { PLANEJAMENTO: 'Planejamento', ATIVO: 'Ativo', FINALIZADO: 'Finalizado' }
@@ -152,15 +154,77 @@ export function PeriodoLetivoModal({ open, onClose, onSubmit, periodo }: Props) 
             </div>
           )}
 
-          <div className="flex justify-end gap-3 pt-2 border-t border-[#ddd]">
-            <button type="button" onClick={onClose}
-              className="bg-white text-[#2e7d32] border border-[#2e7d32] px-5 py-2 rounded text-sm font-medium hover:bg-[#e8f5e9] transition">
-              Cancelar
-            </button>
-            <button type="submit" disabled={loading}
-              className="bg-[#2e7d32] text-white px-5 py-2 rounded text-sm font-medium hover:bg-[#1a5c1a] transition disabled:opacity-50">
-              {loading ? 'Salvando...' : isEdit ? 'Salvar' : 'Criar Período'}
-            </button>
+          <div className="flex justify-between items-center gap-3 pt-2 border-t border-[#ddd]">
+            <div className="flex items-center gap-2">
+              {isEdit && periodo && (
+                <>
+                  {periodo.status === 'FINALIZADO' && (
+                    <button type="button" onClick={async () => {
+                      if (!confirm(`Reativar período ${periodo.descricao}?`)) return
+                      setLoading(true)
+                      try {
+                        if (typeof (window as any) !== 'undefined') {
+                          // call parent handler if provided via props
+                          if ((arguments as any).callee) {}
+                        }
+                        if (typeof (onSubmit) === 'function') {
+                          await onSubmit({
+                            ano: periodo.ano,
+                            semestre: periodo.semestre,
+                            dataInicio: periodo.dataInicio,
+                            dataFim: periodo.dataFim,
+                            status: 'ATIVO',
+                          } as unknown as FormData)
+                        }
+                      } finally { setLoading(false) }
+                    }} className="text-xs text-[#2e7d32] hover:underline">Reativar</button>
+                  )}
+                  {periodo.status !== 'PLANEJAMENTO' && (
+                    <button type="button" onClick={async () => {
+                      if (!confirm(`Retornar ${periodo.descricao} para PLANEJAMENTO?`)) return
+                      setLoading(true)
+                      try {
+                        if (typeof (onSubmit) === 'function') {
+                          await onSubmit({
+                            ano: periodo.ano,
+                            semestre: periodo.semestre,
+                            dataInicio: periodo.dataInicio,
+                            dataFim: periodo.dataFim,
+                            status: 'PLANEJAMENTO',
+                          } as unknown as FormData)
+                        }
+                      } finally { setLoading(false) }
+                    }} className="text-xs text-[#6b7280] hover:underline">Retornar para Planejamento</button>
+                  )}
+                  <button type="button" onClick={async () => {
+                    if (!confirm(`Excluir o período ${periodo.descricao}?`)) return
+                    setLoading(true)
+                    try {
+                      if (typeof (onSubmit) === 'function') {
+                        // call delete via fetch directly if parent didn't pass handler
+                        const res = await fetch(`/api/periodos-letivos/${periodo.id}`, { method: 'DELETE' })
+                        const json = await res.json()
+                        if (!res.ok) throw new Error(json.error || 'Erro ao excluir período')
+                        // reload page expectations are handled by parent when modal closes
+                        onClose()
+                      }
+                    } catch (e: any) {
+                      alert(e.message)
+                    } finally { setLoading(false) }
+                  }} className="text-xs text-[#e53935] hover:underline">Excluir</button>
+                </>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={onClose}
+                className="bg-white text-[#2e7d32] border border-[#2e7d32] px-5 py-2 rounded text-sm font-medium hover:bg-[#e8f5e9] transition">
+                Cancelar
+              </button>
+              <button type="submit" disabled={loading}
+                className="bg-[#2e7d32] text-white px-5 py-2 rounded text-sm font-medium hover:bg-[#1a5c1a] transition disabled:opacity-50">
+                {loading ? 'Salvando...' : isEdit ? 'Salvar' : 'Criar Período'}
+              </button>
+            </div>
           </div>
         </form>
       </div>

@@ -213,6 +213,9 @@ export default function DisciplinasPage() {
                   Professores
                 </th>
                 <th className="text-left px-4 py-3 text-xs font-medium tracking-widest text-gray-700 uppercase">
+                  Modalidade
+                </th>
+                <th className="text-left px-4 py-3 text-xs font-medium tracking-widest text-gray-700 uppercase">
                   Status
                 </th>
                 <th className="px-4 py-3" />
@@ -259,8 +262,17 @@ export default function DisciplinasPage() {
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3">
-                    {d.ativo ? (
+                  <td className="px-4 py-3">                    <span
+                      className={`text-xs px-3 py-0.5 rounded-full border ${
+                        d.modalidade === 'ONLINE'
+                          ? 'bg-[#e3f2fd] text-[#0d47a1] border-[#90caf9]'
+                          : 'bg-[#e8f5e9] text-[#1b5e20] border-[#a5d6a7]'
+                      }`}
+                    >
+                      {d.modalidade === 'ONLINE' ? 'Online' : 'Presencial'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">                    {d.ativo ? (
                       <span className="bg-[#e8f5e9] text-[#1b5e20] border border-[#a5d6a7] text-xs px-3 py-0.5 rounded-full">
                         Ativo
                       </span>

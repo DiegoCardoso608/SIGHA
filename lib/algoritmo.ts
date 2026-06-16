@@ -1,7 +1,9 @@
 import { prisma } from './prisma'
 import type { DiaSemana, Turno } from '@prisma/client'
 
-// Sprint 6.1 - Algoritmo de alocação
+// Sprint 8 + 8.1 — Alocação por Dia Acadêmico + Política EAD/Online
+
+// ─── Tipos públicos ───────────────────────────────────────────────────────────
 
 export type TipoPendencia =
   | 'SEM_PROFESSOR_VINCULADO'
@@ -73,123 +75,530 @@ export interface ResultadoGradeCurso {
   }
 }
 
-// Internals
-interface EstadoAlocacao {
-  professorOcupado: Map<string, Set<string>>
-  turmaOcupada: Map<string, Set<string>>
-  horasAlocadas: Map<string, number>
-  diasTurma: Map<string, Map<DiaSemana, number>>
-  diasGlobal: Map<DiaSemana, number>
-  cargaProfessorDia: Map<string, Map<DiaSemana, number>>
-  encontrosDisciplinaTurma: Map<string, Map<DiaSemana, number>>
+// ─── Tipos internos ───────────────────────────────────────────────────────────
+
+interface BlocoHorario {
+  id: string
+  inicio: string
+  fim: string
+  turno: Turno
+  ordem: number
 }
 
-interface SlotCandidato {
-  diaSemana: DiaSemana
-  bloco: { id: string; inicio: string; fim: string; turno: Turno; ordem: number }
+interface GrupoCandidato {
+  professorId: string
+  professorNome: string
   professor: any
+  diaSemana: DiaSemana
+  blocos: BlocoHorario[]
   pontuacao: number
 }
 
-const DIAS_SEMANA: DiaSemana[] = ['SEGUNDA', 'TERCA', 'QUARTA', 'QUINTA', 'SEXTA', 'SABADO']
+interface EstadoAlocacao {
+  // chave: `${blocoId}|${diaSemana}` → professorId ocupado
+  professorOcupado: Map<string, Set<string>>
+  turmaOcupada: Map<string, Set<string>>
+  horasAlocadas: Map<string, number>
+  // quantas aulas a turma tem naquele dia
+  diasTurma: Map<string, Map<DiaSemana, number>>
+  diasGlobal: Map<DiaSemana, number>
+  // dias em que o professor comparece
+  diasProfessor: Map<string, Set<DiaSemana>>
+  cargaProfessorDia: Map<string, Map<DiaSemana, number>>
+  // último bloco alocado na turma naquele dia (para verificar consecutividade)
+  ultimoBlocoTurmaDia: Map<string, Map<DiaSemana, number>>
+}
 
-const PESO_DIA_TURMA = 30
-const PESO_DIA_GLOBAL = 15
-const PESO_PROF_DIA = 15
-const PESO_PROF_CARGA = 10
-const PESO_BLOCO_POSICAO = 20
-const PESO_DISCIPLINA_DIA = 40
+// ─── Constantes ───────────────────────────────────────────────────────────────
+
+const DIAS_SEMANA: DiaSemana[] = ['SEGUNDA', 'TERCA', 'QUARTA', 'QUINTA', 'SEXTA', 'SABADO']
+const DIAS_UTEIS: DiaSemana[] = ['SEGUNDA', 'TERCA', 'QUARTA', 'QUINTA', 'SEXTA']
+
+// Bônus
+const BONUS_CONSECUTIVO = 60      // blocos em sequência sem buracos
+const BONUS_MESMO_DIA = 40        // disciplina já tem aula naquele dia (concentrar)
+const BONUS_CONTINUIDADE_DOCENTE = 25 // professor já está presente naquele dia
+const BONUS_PRIMEIRO_BLOCO = 20   // blocos iniciais do turno são preferidos
+
+// Sprint 8.2 additions
+const PENALIDADE_EAD_HORARIO_NOBRE = 120
+const PENALIDADE_FRAGMENTACAO_BASE = 30
+const BONUS_OCUPACAO_VERTICAL = 25
+// Penalidades
+const PENALIDADE_DIA_CHEIO_TURMA = 35   // turma já tem muitas aulas no dia
+const PENALIDADE_DISPERSAO_PROFESSOR = 20 // professor comparece em dia novo
+const PENALIDADE_DIA_GLOBAL = 12        // dia já concentra muitas aulas no geral
+const PENALIDADE_CARGA_PROFESSOR = 8    // professor mais carregado perde prioridade
+
+// EAD: prioridade de dias
+const DIAS_PRIORIDADE_ONLINE: DiaSemana[] = ['SABADO', 'SEXTA', 'QUINTA', 'QUARTA', 'TERCA', 'SEGUNDA']
 
 const SEMANAS_LETIVAS_PADRAO = 20
 const prioridadeTipo: Record<string, number> = { TITULAR: 0, SUBSTITUTO: 1, RESERVA: 2 }
 
-function chave(blocoId: string, diaSemana: string) {
+// ─── Helpers básicos ──────────────────────────────────────────────────────────
+
+function chaveSlot(blocoId: string, diaSemana: DiaSemana): string {
   return `${blocoId}|${diaSemana}`
 }
 
-function chaveDisciplinaTurma(disciplinaId: string, turmaId: string) {
-  return `${disciplinaId}|${turmaId}`
-}
-
-function turnoCompativel(turnoTurma: Turno, turnoBloco: Turno) {
+function turnoCompativel(turnoTurma: Turno, turnoBloco: Turno): boolean {
   return turnoTurma === turnoBloco
 }
 
-function calcularNecessidadeSemanal(cargaHoraria: number, semanasLetivas = SEMANAS_LETIVAS_PADRAO) {
+function calcularNecessidadeSemanal(cargaHoraria: number, semanasLetivas = SEMANAS_LETIVAS_PADRAO): number {
   const necessidade = Math.ceil(cargaHoraria / semanasLetivas)
   return Math.max(1, Math.min(5, necessidade))
 }
 
-function calcularSemanasLetivas(dataInicio: Date, dataFim: Date) {
+function calcularSemanasLetivas(dataInicio: Date, dataFim: Date): number {
   const msEmUmaSemana = 7 * 24 * 60 * 60 * 1000
   const diffMs = dataFim.getTime() - dataInicio.getTime()
   const semanas = Math.floor(diffMs / msEmUmaSemana)
   return Math.max(10, Math.min(26, semanas))
 }
 
-function classificarPendencia({ professoresVinculados, todosNoLimite, semDisponibilidade }: any): { tipoPendencia: TipoPendencia; motivo: string } {
-  if (professoresVinculados === 0) return { tipoPendencia: 'SEM_PROFESSOR_VINCULADO', motivo: 'Nenhum professor está vinculado a esta disciplina.' }
-  if (todosNoLimite) return { tipoPendencia: 'CARGA_HORARIA_ESGOTADA', motivo: 'Todos os professores autorizados atingiram o limite de carga horária.' }
-  if (semDisponibilidade) return { tipoPendencia: 'SEM_DISPONIBILIDADE_COMPATIVEL', motivo: 'Professores vinculados encontrados, porém nenhum possui disponibilidade compatível com a turma.' }
+function classificarPendencia({
+  professoresVinculados,
+  todosNoLimite,
+  semDisponibilidade,
+}: {
+  professoresVinculados: number
+  todosNoLimite: boolean
+  semDisponibilidade: boolean
+}): { tipoPendencia: TipoPendencia; motivo: string } {
+  if (professoresVinculados === 0)
+    return { tipoPendencia: 'SEM_PROFESSOR_VINCULADO', motivo: 'Nenhum professor está vinculado a esta disciplina.' }
+  if (todosNoLimite)
+    return { tipoPendencia: 'CARGA_HORARIA_ESGOTADA', motivo: 'Todos os professores autorizados atingiram o limite de carga horária.' }
+  if (semDisponibilidade)
+    return { tipoPendencia: 'SEM_DISPONIBILIDADE_COMPATIVEL', motivo: 'Professores vinculados encontrados, porém nenhum possui disponibilidade compatível com a turma.' }
   return { tipoPendencia: 'CONFLITO_DE_HORARIO', motivo: 'Os professores autorizados já estão alocados nos horários disponíveis para esta turma.' }
 }
 
-function pontuar({ diaSemana, blocoOrdem, turmaId, professorId, disciplinaId, totalBlocosNoTurno, estado }: any) {
+function professorsFilter(professores: any[], disciplinaId: string): any[] {
+  return professores.filter((p: any) => p.disciplinas.some((pd: any) => pd.disciplinaId === disciplinaId))
+}
+
+// ─── Estado vazio e pré-carregamento ──────────────────────────────────────────
+
+function criarEstadoVazio(): EstadoAlocacao {
+  return {
+    professorOcupado: new Map(),
+    turmaOcupada: new Map(),
+    horasAlocadas: new Map(),
+    diasTurma: new Map(),
+    diasGlobal: new Map(),
+    diasProfessor: new Map(),
+    cargaProfessorDia: new Map(),
+    ultimoBlocoTurmaDia: new Map(),
+  }
+}
+
+function registrarNoEstado({
+  turmaId,
+  professorId,
+  blocoId,
+  blocoOrdem,
+  diaSemana,
+  estado,
+}: {
+  turmaId: string
+  professorId: string
+  blocoId: string
+  blocoOrdem: number
+  diaSemana: DiaSemana
+  estado: EstadoAlocacao
+}) {
+  const slot = chaveSlot(blocoId, diaSemana)
+
+  if (!estado.professorOcupado.has(professorId)) estado.professorOcupado.set(professorId, new Set())
+  estado.professorOcupado.get(professorId)!.add(slot)
+
+  if (!estado.turmaOcupada.has(turmaId)) estado.turmaOcupada.set(turmaId, new Set())
+  estado.turmaOcupada.get(turmaId)!.add(slot)
+
+  estado.horasAlocadas.set(professorId, (estado.horasAlocadas.get(professorId) ?? 0) + 1)
+
+  if (!estado.diasTurma.has(turmaId)) estado.diasTurma.set(turmaId, new Map())
+  const dt = estado.diasTurma.get(turmaId)!
+  dt.set(diaSemana, (dt.get(diaSemana) ?? 0) + 1)
+
+  estado.diasGlobal.set(diaSemana, (estado.diasGlobal.get(diaSemana) ?? 0) + 1)
+
+  if (!estado.diasProfessor.has(professorId)) estado.diasProfessor.set(professorId, new Set())
+  estado.diasProfessor.get(professorId)!.add(diaSemana)
+
+  if (!estado.cargaProfessorDia.has(professorId)) estado.cargaProfessorDia.set(professorId, new Map())
+  const cpd = estado.cargaProfessorDia.get(professorId)!
+  cpd.set(diaSemana, (cpd.get(diaSemana) ?? 0) + 1)
+
+  // rastrear último bloco da turma naquele dia (para consecutividade)
+  const chaveUlt = turmaId
+  if (!estado.ultimoBlocoTurmaDia.has(chaveUlt)) estado.ultimoBlocoTurmaDia.set(chaveUlt, new Map())
+  const ubd = estado.ultimoBlocoTurmaDia.get(chaveUlt)!
+  const atual = ubd.get(diaSemana) ?? -1
+  if (blocoOrdem > atual) ubd.set(diaSemana, blocoOrdem)
+}
+
+function preCarregarEstado(alocacoesExistentes: any[], blocosPorId: Map<string, BlocoHorario>, estado: EstadoAlocacao) {
+  for (const a of alocacoesExistentes) {
+    const bloco = blocosPorId.get(a.blocoId)
+    registrarNoEstado({
+      turmaId: a.turmaId,
+      professorId: a.professorId ?? '__sem_professor__',
+      blocoId: a.blocoId,
+      blocoOrdem: bloco?.ordem ?? 0,
+      diaSemana: a.diaSemana,
+      estado,
+    })
+  }
+}
+
+// ─── Slots disponíveis do professor ──────────────────────────────────────────
+
+function slotsDisponivelsProfessor(professor: any, blocos: BlocoHorario[]): Array<{ diaSemana: DiaSemana; bloco: BlocoHorario }> {
+  if (professor.disponibilidadesBloco?.length > 0) {
+    return professor.disponibilidadesBloco
+      .filter((db: any) => db.disponivel)
+      .map((db: any) => ({ diaSemana: db.diaSemana as DiaSemana, bloco: db.bloco as BlocoHorario }))
+  }
+  // fallback: disponibilidade por turno
+  return professor.disponibilidades.flatMap((d: any) =>
+    blocos.filter((b) => b.turno === d.turno).map((b) => ({ diaSemana: d.diaSemana as DiaSemana, bloco: b }))
+  )
+}
+
+// ─── Sistema de pontuação por grupo ──────────────────────────────────────────
+
+function pontuarGrupo({
+  turmaId,
+  professorId,
+  diaSemana,
+  blocos,
+  estado,
+  isOnline,
+}: {
+  turmaId: string
+  professorId: string
+  diaSemana: DiaSemana
+  blocos: BlocoHorario[]
+  estado: EstadoAlocacao
+  isOnline: boolean
+}): number {
   let pontos = 100
-  const alocacoesDiaTurma = estado.diasTurma.get(turmaId)?.get(diaSemana) ?? 0
-  pontos -= alocacoesDiaTurma * PESO_DIA_TURMA
+
+  // Bônus: consecutividade — verifica se os blocos formam sequência sem buracos
+  const ordens = blocos.map((b) => b.ordem).sort((a, b) => a - b)
+  let consecutivo = true
+  for (let i = 1; i < ordens.length; i++) {
+    if (ordens[i] !== ordens[i - 1] + 1) { consecutivo = false; break }
+  }
+  if (consecutivo && blocos.length > 1) pontos += BONUS_CONSECUTIVO
+
+  // Bônus: disciplina/turma já tem aula nesse dia (concentrar encontros)
+  const aulasNoDia = estado.diasTurma.get(turmaId)?.get(diaSemana) ?? 0
+  if (aulasNoDia > 0 && aulasNoDia < 4) pontos += BONUS_MESMO_DIA
+
+  // Bônus: professor já está presente nesse dia
+  if (estado.diasProfessor.get(professorId)?.has(diaSemana)) pontos += BONUS_CONTINUIDADE_DOCENTE
+
+  // Bônus: blocos iniciais do turno (primeiros são melhores)
+  const menorOrdem = Math.min(...blocos.map((b) => b.ordem))
+  pontos += Math.max(0, BONUS_PRIMEIRO_BLOCO - menorOrdem * 3)
+
+  // Penalidade: turma já sobrecarregada nesse dia
+  if (aulasNoDia >= 4) pontos -= PENALIDADE_DIA_CHEIO_TURMA * (aulasNoDia - 3)
+
+  // Penalidade: dia global muito cheio
   const maxGlobal = Math.max(...DIAS_SEMANA.map((d) => estado.diasGlobal.get(d) ?? 0), 1)
   const proporcaoGlobal = (estado.diasGlobal.get(diaSemana) ?? 0) / maxGlobal
-  pontos -= proporcaoGlobal * PESO_DIA_GLOBAL
-  const alocacoesProfDia = estado.cargaProfessorDia.get(professorId)?.get(diaSemana) ?? 0
-  pontos -= alocacoesProfDia * PESO_PROF_DIA
+  pontos -= proporcaoGlobal * PENALIDADE_DIA_GLOBAL
+
+  // Penalidade: professor comparece em dia novo (dispersão)
+  if (!estado.diasProfessor.get(professorId)?.has(diaSemana)) pontos -= PENALIDADE_DISPERSAO_PROFESSOR
+
+  // Penalidade: carga acumulada do professor
   const cargaAtual = estado.horasAlocadas.get(professorId) ?? 0
-  pontos -= cargaAtual * PESO_PROF_CARGA
-  if (totalBlocosNoTurno > 1) {
-    const proporcaoInicial = 1 - (blocoOrdem - 1) / (totalBlocosNoTurno - 1)
-    pontos += proporcaoInicial * PESO_BLOCO_POSICAO
+  pontos -= cargaAtual * PENALIDADE_CARGA_PROFESSOR
+
+  // Disciplinas online: preferem SABADO (penalizar dias úteis principais)
+  if (isOnline) {
+    const indicePrioridade = DIAS_PRIORIDADE_ONLINE.indexOf(diaSemana)
+    pontos += (DIAS_PRIORIDADE_ONLINE.length - indicePrioridade) * 15
   }
-  const chaveDisc = chaveDisciplinaTurma(disciplinaId, turmaId)
-  const encontrosDia = estado.encontrosDisciplinaTurma.get(chaveDisc)?.get(diaSemana) ?? 0
-  if (encontrosDia > 0) pontos -= encontrosDia * PESO_DISCIPLINA_DIA
+
+  // Penalizar EAD em horarios nobres (blocos centrais)
+  if (isOnline) {
+    const menorOrdem = Math.min(...blocos.map((b) => b.ordem))
+    const maiorOrdem = Math.max(...blocos.map((b) => b.ordem))
+    const media = (menorOrdem + maiorOrdem) / 2
+    // blocos centrais aproximados -> aplicar penalidade
+    pontos -= PENALIDADE_EAD_HORARIO_NOBRE * (blocos.length > 0 ? 1 : 0)
+    // less penalty if bloco is late in turno (prefer last blocks)
+    const ultimaOrdem = Math.max(...blocos.map((b) => b.ordem))
+    pontos += Math.max(0, (BONUS_PRIMEIRO_BLOCO - ultimaOrdem)) * -1
+  }
+
   return pontos
 }
 
-function registrarNoEstado({ turmaId, professorId, blocoId, diaSemana, disciplinaId, estado }: any) {
-  const slot = chave(blocoId, diaSemana)
-  if (!estado.professorOcupado.has(professorId)) estado.professorOcupado.set(professorId, new Set())
-  estado.professorOcupado.get(professorId)!.add(slot)
-  if (!estado.turmaOcupada.has(turmaId)) estado.turmaOcupada.set(turmaId, new Set())
-  estado.turmaOcupada.get(turmaId)!.add(slot)
-  estado.horasAlocadas.set(professorId, (estado.horasAlocadas.get(professorId) ?? 0) + 1)
-  if (!estado.diasTurma.has(turmaId)) estado.diasTurma.set(turmaId, new Map())
-  const diasTurma = estado.diasTurma.get(turmaId)!
-  diasTurma.set(diaSemana, (diasTurma.get(diaSemana) ?? 0) + 1)
-  estado.diasGlobal.set(diaSemana, (estado.diasGlobal.get(diaSemana) ?? 0) + 1)
-  if (!estado.cargaProfessorDia.has(professorId)) estado.cargaProfessorDia.set(professorId, new Map())
-  const cargaDia = estado.cargaProfessorDia.get(professorId)!
-  cargaDia.set(diaSemana, (cargaDia.get(diaSemana) ?? 0) + 1)
-  const chaveDisc = chaveDisciplinaTurma(disciplinaId, turmaId)
-  if (!estado.encontrosDisciplinaTurma.has(chaveDisc)) estado.encontrosDisciplinaTurma.set(chaveDisc, new Map())
-  const encDia = estado.encontrosDisciplinaTurma.get(chaveDisc)!
-  encDia.set(diaSemana, (encDia.get(diaSemana) ?? 0) + 1)
+// ─── Busca de grupos de blocos consecutivos ───────────────────────────────────
+
+/**
+ * Tenta encontrar `qtd` blocos consecutivos disponíveis para a turma+professor
+ * em um dado dia, preferindo os primeiros blocos do turno.
+ */
+function buscarBlocosConsecutivos({
+  turmaId,
+  professorId,
+  diaSemana,
+  qtd,
+  blocosTurno,
+  estado,
+}: {
+  turmaId: string
+  professorId: string
+  diaSemana: DiaSemana
+  qtd: number
+  blocosTurno: BlocoHorario[]
+  estado: EstadoAlocacao
+}): BlocoHorario[] | null {
+  const ordenados = [...blocosTurno].sort((a, b) => a.ordem - b.ordem)
+
+  for (let inicio = 0; inicio <= ordenados.length - qtd; inicio++) {
+    const candidatos = ordenados.slice(inicio, inicio + qtd)
+
+    // Verificar consecutividade real
+    let consecutive = true
+    for (let i = 1; i < candidatos.length; i++) {
+      if (candidatos[i].ordem !== candidatos[i - 1].ordem + 1) { consecutive = false; break }
+    }
+    if (!consecutive) continue
+
+    // Verificar disponibilidade de cada slot
+    const todosLivres = candidatos.every((b) => {
+      const slot = chaveSlot(b.id, diaSemana)
+      return !estado.professorOcupado.get(professorId)?.has(slot)
+        && !estado.turmaOcupada.get(turmaId)?.has(slot)
+    })
+    if (todosLivres) return candidatos
+  }
+  return null
 }
 
-function detectarConflitosCruzados(alocadas: AlocacaoCriada[], blocos: Array<{ id: string; inicio: string; fim: string }>) {
+// Gera todos os candidatos (grupos) possíveis para uma disciplina
+function gerarCandidatosParaDisciplina({
+  turma,
+  disciplina,
+  professoresAutorizados,
+  blocos,
+  semanasLetivas,
+  estado,
+}: {
+  turma: { id: string; nome: string; turno: Turno }
+  disciplina: { id: string; nome: string; cargaHoraria: number; modalidade?: string }
+  professoresAutorizados: any[]
+  blocos: BlocoHorario[]
+  semanasLetivas: number
+  estado: EstadoAlocacao
+}) {
+  const isOnline = disciplina.modalidade === 'ONLINE'
+  const necessidade = calcularNecessidadeSemanal(disciplina.cargaHoraria, semanasLetivas)
+  const candidatosPorProfessorDia: Map<string, GrupoCandidato[]> = new Map()
+
+  const blocosTurno = blocos.filter((b) => turnoCompativel(turma.turno, b.turno))
+
+  for (const professor of professoresAutorizados) {
+    const slotsProf = slotsDisponivelsProfessor(professor, blocos)
+    for (const dia of isOnline ? DIAS_PRIORIDADE_ONLINE : [...DIAS_UTEIS, 'SABADO' as DiaSemana]) {
+      const blocosProfDia = slotsProf.filter((s) => s.diaSemana === dia && turnoCompativel(turma.turno, s.bloco.turno)).map((s) => s.bloco)
+      if (blocosProfDia.length === 0) continue
+      // tentar grupos de 1..necessidade
+      for (let qtd = Math.min(necessidade, blocosProfDia.length); qtd >= 1; qtd--) {
+        const grupo = buscarBlocosConsecutivos({ turmaId: turma.id, professorId: professor.id, diaSemana: dia, qtd, blocosTurno: blocosProfDia, estado })
+        if (!grupo) continue
+        const pontuacao = pontuarGrupo({ turmaId: turma.id, professorId: professor.id, diaSemana: dia, blocos: grupo, estado, isOnline })
+        const key = `${professor.id}|${dia}`
+        if (!candidatosPorProfessorDia.has(key)) candidatosPorProfessorDia.set(key, [])
+        candidatosPorProfessorDia.get(key)!.push({ professorId: professor.id, professorNome: professor.usuario.nome, professor, diaSemana: dia, blocos: grupo, pontuacao })
+      }
+    }
+  }
+
+  return { necessidade, candidatosPorProfessorDia }
+}
+
+// Combina candidatos (grupos) para formar um plano completo cobrindo a necessidade
+function escolherMelhorPlano({ necessidade, candidatosPorProfessorDia, estado, turmaId }: { necessidade: number; candidatosPorProfessorDia: Map<string, GrupoCandidato[]>; estado: EstadoAlocacao; turmaId: string }) {
+  const candidatosList = Array.from(candidatosPorProfessorDia.values()).flat()
+  // backtracking combinar grupos sem sobreposição de slots
+  let melhorPlano: GrupoCandidato[] = []
+  let melhorScore = -Infinity
+
+  function slotsToSet(grupos: GrupoCandidato[]) {
+    const s = new Set<string>()
+    for (const g of grupos) for (const b of g.blocos) s.add(chaveSlot(b.id, g.diaSemana))
+    return s
+  }
+
+  function backtrack(start: number, chosen: GrupoCandidato[], chosenSlots: Set<string>) {
+    const totalAulas = chosen.reduce((acc, g) => acc + g.blocos.length, 0)
+    if (totalAulas === necessidade) {
+      // pontuar plano com penalidades adicionais (fragmentação, compactacao docente, ocupacao vertical)
+      let score = chosen.reduce((acc, g) => acc + g.pontuacao, 0)
+      // fragmentação: penalizar número de dias usados
+      const diasUsados = new Set(chosen.map((g) => g.diaSemana)).size
+      score -= (diasUsados - 1) * PENALIDADE_FRAGMENTACAO_BASE
+      // compactacao docente: penalizar número de dias distintos por professor
+      const profDias = new Map<string, Set<DiaSemana>>() as any
+      for (const g of chosen) {
+        if (!profDias.has(g.professorId)) profDias.set(g.professorId, new Set())
+        profDias.get(g.professorId).add(g.diaSemana)
+      }
+      for (const [_, ds] of profDias) score -= (ds.size - 1) * 10
+      // ocupacao vertical: bonus se usar dias já presentes no estado.diasTurma
+      for (const d of new Set(chosen.map((g) => g.diaSemana))) {
+        if ((estado.diasTurma.get(turmaId)?.get(d) ?? 0) > 0) score += BONUS_OCUPACAO_VERTICAL
+      }
+
+      if (score > melhorScore) {
+        melhorScore = score
+        melhorPlano = [...chosen]
+      }
+      return
+    }
+    if (totalAulas > necessidade) return
+
+    for (let i = start; i < candidatosList.length; i++) {
+      const c = candidatosList[i]
+      const overlap = c.blocos.some((b) => chosenSlots.has(chaveSlot(b.id, c.diaSemana)))
+      if (overlap) continue
+      // professor carga check can be deferred; assume validated earlier
+      // choose
+      const addedSlots = c.blocos.map((b) => chaveSlot(b.id, c.diaSemana))
+      for (const s of addedSlots) chosenSlots.add(s)
+      chosen.push(c)
+      backtrack(i + 1, chosen, chosenSlots)
+      chosen.pop()
+      for (const s of addedSlots) chosenSlots.delete(s)
+    }
+  }
+
+  backtrack(0, [], new Set())
+  return { melhorPlano, melhorScore }
+}
+
+// ─── Ordenar professores ──────────────────────────────────────────────────────
+
+function ordenarProfessores(professores: any[], estado: EstadoAlocacao): any[] {
+  return [...professores].sort((a, b) => {
+    // 1. Tipo: TITULAR > SUBSTITUTO > RESERVA
+    const tipoDiff = prioridadeTipo[a.tipo ?? 'TITULAR'] - prioridadeTipo[b.tipo ?? 'TITULAR']
+    if (tipoDiff !== 0) return tipoDiff
+    // 2. Menor carga acumulada primeiro
+    const cargaA = a.alocacoes.length + (estado.horasAlocadas.get(a.id) ?? 0)
+    const cargaB = b.alocacoes.length + (estado.horasAlocadas.get(b.id) ?? 0)
+    if (cargaA !== cargaB) return cargaA - cargaB
+    // 3. Mais slots disponíveis primeiro
+    const slotsA = a.disponibilidadesBloco?.length || a.disponibilidades?.length || 0
+    const slotsB = b.disponibilidadesBloco?.length || b.disponibilidades?.length || 0
+    return slotsA - slotsB
+  })
+}
+
+// ─── Núcleo de alocação por Dia Acadêmico ────────────────────────────────────
+
+interface OpcaoAloc {
+  turma: { id: string; nome: string; turno: Turno }
+  disciplina: { id: string; nome: string; cargaHoraria: number; modalidade?: string }
+  professoresAutorizados: any[]
+  blocos: BlocoHorario[]
+  semanasLetivas: number
+  estado: EstadoAlocacao
+}
+
+interface SaidaAloc {
+  alocadas: AlocacaoCriada[]
+  pendencias: PendenciaDetalhada[]
+  registros: any[]
+}
+
+function alocarDisciplinaCompleta(opcao: OpcaoAloc): SaidaAloc {
+  const { turma, disciplina, professoresAutorizados, blocos, semanasLetivas, estado } = opcao
+  const isOnline = disciplina.modalidade === 'ONLINE'
+  const { necessidade, candidatosPorProfessorDia } = gerarCandidatosParaDisciplina({ turma, disciplina, professoresAutorizados, blocos, semanasLetivas, estado })
+
+  const alocadas: AlocacaoCriada[] = []
+  const registros: any[] = []
+
+  if (candidatosPorProfessorDia.size === 0) {
+    // Sem candidatos -> pendencias
+    const professoresComDisponibilidade = 0
+    const todosNoLimite = professoresAutorizados.every(
+      (p: any) => p.alocacoes.length + (estado.horasAlocadas.get(p.id) ?? 0) >= p.cargaHorariaMax
+    )
+    const classPendencia = classificarPendencia({ professoresVinculados: professoresAutorizados.length, todosNoLimite, semDisponibilidade: true })
+    const pendencias: PendenciaDetalhada[] = []
+    for (let i = 0; i < necessidade; i++) {
+      pendencias.push({ turmaId: turma.id, turmaNome: turma.nome, disciplinaId: disciplina.id, disciplinaNome: disciplina.nome, ...classPendencia, professoresVinculados: professoresAutorizados.length, professoresDisponiveis: 0 })
+    }
+    return { alocadas: [], pendencias, registros: [] }
+  }
+
+  const { melhorPlano } = escolherMelhorPlano({ necessidade, candidatosPorProfessorDia, estado, turmaId: turma.id })
+
+  // Aplicar melhorPlano ao estado e gerar registros
+  for (const g of melhorPlano) {
+    for (const bloco of g.blocos) {
+      alocadas.push({ turmaId: turma.id, turmaNome: turma.nome, disciplinaId: disciplina.id, disciplinaNome: disciplina.nome, professorId: g.professorId, professorNome: g.professorNome, blocoId: bloco.id, blocoInicio: bloco.inicio, blocoFim: bloco.fim, diaSemana: g.diaSemana })
+      registros.push({ turmaId: turma.id, disciplinaId: disciplina.id, professorId: g.professorId, blocoId: bloco.id, diaSemana: g.diaSemana, online: isOnline, status: 'CONFIRMADA' })
+      registrarNoEstado({ turmaId: turma.id, professorId: g.professorId, blocoId: bloco.id, blocoOrdem: bloco.ordem, diaSemana: g.diaSemana, estado })
+    }
+  }
+
+  // construir pendencias caso não tenha sido possível completar
+  const encontrosRealizados = alocadas.length
+  const pendencias: PendenciaDetalhada[] = []
+  if (encontrosRealizados < necessidade) {
+    const professoresComDisponibilidade = professoresAutorizados.filter((p: any) => {
+      const slots = slotsDisponivelsProfessor(p, blocos)
+      return slots.some((s) => turnoCompativel(turma.turno, s.bloco.turno))
+    }).length
+    const todosNoLimite = professoresAutorizados.every(
+      (p: any) => p.alocacoes.length + (estado.horasAlocadas.get(p.id) ?? 0) >= p.cargaHorariaMax
+    )
+    const classPendencia = classificarPendencia({ professoresVinculados: professoresAutorizados.length, todosNoLimite, semDisponibilidade: professoresComDisponibilidade === 0 })
+    const faltantes = necessidade - encontrosRealizados
+    for (let i = 0; i < faltantes; i++) {
+      pendencias.push({ turmaId: turma.id, turmaNome: turma.nome, disciplinaId: disciplina.id, disciplinaNome: disciplina.nome, ...classPendencia, professoresVinculados: professoresAutorizados.length, professoresDisponiveis: professoresComDisponibilidade })
+    }
+  }
+
+  return { alocadas, pendencias, registros }
+}
+
+// ─── Detecção de conflitos cruzados ──────────────────────────────────────────
+
+function detectarConflitosCruzados(
+  alocadas: AlocacaoCriada[],
+  blocosPorId: Map<string, BlocoHorario>
+): ConflitoCruzado[] {
   const conflitos: ConflitoCruzado[] = []
-  const mapaBlocos = new Map(blocos.map((b) => [b.id, b]))
   const porProfessor = new Map<string, AlocacaoCriada[]>()
+
   for (const a of alocadas) {
     if (!porProfessor.has(a.professorId)) porProfessor.set(a.professorId, [])
     porProfessor.get(a.professorId)!.push(a)
   }
-  for (const [, alocacoesProfessor] of porProfessor) {
-    for (let i = 0; i < alocacoesProfessor.length; i++) {
-      for (let j = i + 1; j < alocacoesProfessor.length; j++) {
-        const a = alocacoesProfessor[i]
-        const b = alocacoesProfessor[j]
+
+  for (const [, lista] of porProfessor) {
+    for (let i = 0; i < lista.length; i++) {
+      for (let j = i + 1; j < lista.length; j++) {
+        const a = lista[i]
+        const b = lista[j]
         if (a.diaSemana === b.diaSemana && a.blocoId === b.blocoId && a.turmaId !== b.turmaId) {
-          const bloco = mapaBlocos.get(a.blocoId)
+          const bloco = blocosPorId.get(a.blocoId)
           conflitos.push({
             professorId: a.professorId,
             professorNome: a.professorNome,
@@ -205,86 +614,36 @@ function detectarConflitosCruzados(alocadas: AlocacaoCriada[], blocos: Array<{ i
       }
     }
   }
+
   return conflitos
 }
 
-function selecionarMelhorSlot({ turma, disciplinaId, professoresAutorizados, blocos, estado }: any): SlotCandidato | null {
-  const blocosPorTurno = new Map<Turno, number>()
-  for (const b of blocos) blocosPorTurno.set(b.turno, (blocosPorTurno.get(b.turno) ?? 0) + 1)
-  let melhor: SlotCandidato | null = null
-  for (const professor of professoresAutorizados) {
-    const horasAtuais = professor.alocacoes.length + (estado.horasAlocadas.get(professor.id) ?? 0)
-    if (horasAtuais >= professor.cargaHorariaMax) continue
-    const slotsProf = professor.disponibilidadesBloco.length
-      ? professor.disponibilidadesBloco.filter((db: any) => db.disponivel).map((db: any) => ({ diaSemana: db.diaSemana, bloco: db.bloco }))
-      : professor.disponibilidades.flatMap((d: any) => blocos.filter((b: any) => b.turno === d.turno).map((b: any) => ({ diaSemana: d.diaSemana, bloco: b })))
-    const slotsCompativeis = slotsProf.filter((s: any) => turnoCompativel(turma.turno, s.bloco.turno))
-    for (const { diaSemana, bloco } of slotsCompativeis) {
-      const slot = chave(bloco.id, diaSemana)
-      if (estado.professorOcupado.get(professor.id)?.has(slot)) continue
-      if (estado.turmaOcupada.get(turma.id)?.has(slot)) continue
-      const totalBlocosNoTurno = blocosPorTurno.get(bloco.turno) ?? 1
-      const pontuacao = pontuar({ diaSemana, blocoOrdem: bloco.ordem, turmaId: turma.id, professorId: professor.id, disciplinaId, totalBlocosNoTurno, estado })
-      if (melhor === null || pontuacao > melhor.pontuacao) melhor = { diaSemana, bloco, professor, pontuacao }
+// ─── Separar disciplinas em online e presenciais (Sprint 8.1) ────────────────
+
+function separarDisciplinas(disciplinas: any[]): { online: any[]; presenciais: any[] } {
+  const online: any[] = []
+  const presenciais: any[] = []
+  for (const cd of disciplinas) {
+    if (cd.disciplina.modalidade === 'ONLINE') {
+      online.push(cd)
+    } else {
+      presenciais.push(cd)
     }
   }
-  return melhor
+  return { online, presenciais }
 }
 
-function ordenarProfessores(professores: any[], estado: EstadoAlocacao) {
-  return [...professores].sort((a, b) => {
-    const tipoDiff = prioridadeTipo[a.tipo] - prioridadeTipo[b.tipo]
-    if (tipoDiff !== 0) return tipoDiff
-    const cargaA = a.alocacoes.length + (estado.horasAlocadas.get(a.id) ?? 0)
-    const cargaB = b.alocacoes.length + (estado.horasAlocadas.get(b.id) ?? 0)
-    if (cargaA !== cargaB) return cargaA - cargaB
-    const slotsA = a.disponibilidadesBloco.length || a.disponibilidades.length
-    const slotsB = b.disponibilidadesBloco.length || b.disponibilidades.length
-    return slotsA - slotsB
-  })
-}
+// ─── Função pública: gerarGrade (por período letivo / turmas) ────────────────
 
-function criarEstadoVazio(): EstadoAlocacao {
-  return { professorOcupado: new Map(), turmaOcupada: new Map(), horasAlocadas: new Map(), diasTurma: new Map(), diasGlobal: new Map(), cargaProfessorDia: new Map(), encontrosDisciplinaTurma: new Map() }
-}
-
-function preCarregarEstado(alocacoesExistentes: any[], estado: EstadoAlocacao) {
-  for (const alocacao of alocacoesExistentes) {
-    registrarNoEstado({ turmaId: alocacao.turmaId, professorId: alocacao.professorId ?? '__sem_professor__', blocoId: alocacao.blocoId, diaSemana: alocacao.diaSemana, disciplinaId: alocacao.disciplinaId, estado })
-  }
-}
-
-function alocarDisciplinaCompleta({ turma, disciplina, professoresAutorizados, blocos, semanasLetivas, estado }: any) {
-  const necessidade = calcularNecessidadeSemanal(disciplina.cargaHoraria, semanasLetivas)
-  const alocadas: AlocacaoCriada[] = []
-  const registros: any[] = []
-  let encontrosRealizados = 0
-  for (let encontro = 0; encontro < necessidade; encontro++) {
-    const ordenados = ordenarProfessores(professoresAutorizados, estado)
-    const melhor = selecionarMelhorSlot({ turma, disciplinaId: disciplina.id, professoresAutorizados: ordenados, blocos, estado })
-    if (!melhor) break
-    const { professor, bloco, diaSemana } = melhor
-    alocadas.push({ turmaId: turma.id, turmaNome: turma.nome, disciplinaId: disciplina.id, disciplinaNome: disciplina.nome, professorId: professor.id, professorNome: professor.usuario.nome, blocoId: bloco.id, blocoInicio: bloco.inicio, blocoFim: bloco.fim, diaSemana })
-    registros.push({ turmaId: turma.id, disciplinaId: disciplina.id, professorId: professor.id, blocoId: bloco.id, diaSemana, online: false, status: 'CONFIRMADA' })
-    registrarNoEstado({ turmaId: turma.id, professorId: professor.id, blocoId: bloco.id, diaSemana, disciplinaId: disciplina.id, estado })
-    encontrosRealizados++
-  }
-  const pendencias: PendenciaDetalhada[] = []
-  if (encontrosRealizados < necessidade) {
-    const professoresComDisponibilidade = professoresAutorizados.filter((p: any) => {
-      const slots = p.disponibilidadesBloco.length ? p.disponibilidadesBloco.filter((db: any) => db.disponivel).map((db: any) => db.bloco) : blocos.filter((b: any) => p.disponibilidades.some((d: any) => d.turno === b.turno))
-      return slots.some((b: any) => turnoCompativel(turma.turno, b.turno))
-    }).length
-    const todosNoLimite = professoresAutorizados.every((p: any) => p.alocacoes.length + (estado.horasAlocadas.get(p.id) ?? 0) >= p.cargaHorariaMax)
-    const faltantes = necessidade - encontrosRealizados
-    for (let i = 0; i < faltantes; i++) {
-      pendencias.push({ turmaId: turma.id, turmaNome: turma.nome, disciplinaId: disciplina.id, disciplinaNome: disciplina.nome, ...classificarPendencia({ professoresVinculados: professoresAutorizados.length, professoresDisponiveis: professoresComDisponibilidade, todosNoLimite, semDisponibilidade: professoresComDisponibilidade === 0 }), professoresVinculados: professoresAutorizados.length, professoresDisponiveis: professoresComDisponibilidade })
-    }
-  }
-  return { alocadas, pendencias, registros }
-}
-
-export async function gerarGrade({ periodoLetivoId, turmaIds, substituirExistentes = false }: any): Promise<ResultadoAlocacao> {
+export async function gerarGrade({
+  periodoLetivoId,
+  turmaIds,
+  substituirExistentes = false,
+}: {
+  periodoLetivoId: string
+  turmaIds?: string[]
+  substituirExistentes?: boolean
+}): Promise<ResultadoAlocacao> {
   const [periodoLetivo, turmas, professores, blocos] = await Promise.all([
     prisma.periodoLetivo.findUnique({ where: { id: periodoLetivoId } }),
     prisma.turma.findMany({
@@ -317,46 +676,112 @@ export async function gerarGrade({ periodoLetivoId, turmaIds, substituirExistent
     }),
     prisma.blocoHorario.findMany({ orderBy: [{ turno: 'asc' }, { ordem: 'asc' }] }),
   ])
-  const semanasLetivas = periodoLetivo ? calcularSemanasLetivas(periodoLetivo.dataInicio, periodoLetivo.dataFim) : SEMANAS_LETIVAS_PADRAO
+
+  const semanasLetivas = periodoLetivo
+    ? calcularSemanasLetivas(periodoLetivo.dataInicio, periodoLetivo.dataFim)
+    : SEMANAS_LETIVAS_PADRAO
+
+  const blocosPorId = new Map(blocos.map((b) => [b.id, b as BlocoHorario]))
   const estado = criarEstadoVazio()
+
   if (substituirExistentes) {
-    await prisma.alocacao.deleteMany({ where: { turma: { periodoLetivoId, ...(turmaIds?.length ? { id: { in: turmaIds } } : {}) } } })
+    await prisma.alocacao.deleteMany({
+      where: { turma: { periodoLetivoId, ...(turmaIds?.length ? { id: { in: turmaIds } } : {}) } },
+    })
   } else {
-    const alocacoesExistentes = await prisma.alocacao.findMany({ where: { turma: { periodoLetivoId }, status: { not: 'CONFLITO' } }, select: { professorId: true, turmaId: true, blocoId: true, diaSemana: true, disciplinaId: true } })
-    preCarregarEstado(alocacoesExistentes, estado)
+    const existentes = await prisma.alocacao.findMany({
+      where: { turma: { periodoLetivoId }, status: { not: 'CONFLITO' } },
+      select: { professorId: true, turmaId: true, blocoId: true, diaSemana: true, disciplinaId: true },
+    })
+    preCarregarEstado(existentes, blocosPorId, estado)
   }
-  const resultado: ResultadoAlocacao = { alocadas: [], pendencias: [], conflitos: [], resumo: { total: 0, alocadas: 0, pendentes: 0, taxaSucesso: 0 } }
+
+  const resultado: ResultadoAlocacao = {
+    alocadas: [],
+    pendencias: [],
+    conflitos: [],
+    resumo: { total: 0, alocadas: 0, pendentes: 0, taxaSucesso: 0 },
+  }
   const novasAlocacoes: any[] = []
+
   for (const turma of turmas) {
-    const disciplinasDoPeriodo = turma.curso.disciplinas.filter((cd: any) => cd.periodo === turma.periodo && cd.disciplina.ativo)
+    const todasDisciplinas = turma.curso.disciplinas.filter(
+      (cd: any) => cd.periodo === turma.periodo && cd.disciplina.ativo
+    )
     if (!estado.turmaOcupada.has(turma.id)) estado.turmaOcupada.set(turma.id, new Set())
-    for (const cursoDisciplina of disciplinasDoPeriodo) {
+
+    // Sprint 8.1: online primeiro
+    const { online, presenciais } = separarDisciplinas(todasDisciplinas)
+
+    for (const cursoDisciplina of [...online, ...presenciais]) {
       const disciplina = cursoDisciplina.disciplina
       const necessidade = calcularNecessidadeSemanal(disciplina.cargaHoraria, semanasLetivas)
       resultado.resumo.total += necessidade
+
       if (!substituirExistentes) {
-        const encontrosExistentes = await prisma.alocacao.count({ where: { turmaId: turma.id, disciplinaId: disciplina.id, status: { not: 'CONFLITO' } } })
-        if (encontrosExistentes >= necessidade) { resultado.resumo.alocadas += encontrosExistentes; continue }
+        const encontrosExistentes = await prisma.alocacao.count({
+          where: { turmaId: turma.id, disciplinaId: disciplina.id, status: { not: 'CONFLITO' } },
+        })
+        if (encontrosExistentes >= necessidade) {
+          resultado.resumo.alocadas += encontrosExistentes
+          continue
+        }
       }
-      const professoresAutorizados = professores.filter((p: any) => p.disciplinas.some((pd: any) => pd.disciplinaId === disciplina.id))
+
+      const professoresAutorizados = professorsFilter(professores, disciplina.id)
       if (professoresAutorizados.length === 0) {
-        for (let i = 0; i < necessidade; i++) resultado.pendencias.push({ turmaId: turma.id, turmaNome: turma.nome, disciplinaId: disciplina.id, disciplinaNome: disciplina.nome, ...classificarPendencia({ professoresVinculados: 0, professoresDisponiveis: 0, todosNoLimite: false, semDisponibilidade: false }), professoresVinculados: 0, professoresDisponiveis: 0 })
+        for (let i = 0; i < necessidade; i++) {
+          resultado.pendencias.push({
+            turmaId: turma.id,
+            turmaNome: turma.nome,
+            disciplinaId: disciplina.id,
+            disciplinaNome: disciplina.nome,
+            ...classificarPendencia({ professoresVinculados: 0, todosNoLimite: false, semDisponibilidade: false }),
+            professoresVinculados: 0,
+            professoresDisponiveis: 0,
+          })
+        }
         continue
       }
-      const saida = alocarDisciplinaCompleta({ turma: { id: turma.id, nome: turma.nome, turno: turma.turno }, disciplina: { id: disciplina.id, nome: disciplina.nome, cargaHoraria: disciplina.cargaHoraria }, professoresAutorizados, blocos, semanasLetivas, estado })
+
+      const saida = alocarDisciplinaCompleta({
+        turma: { id: turma.id, nome: turma.nome, turno: turma.turno },
+        disciplina: { id: disciplina.id, nome: disciplina.nome, cargaHoraria: disciplina.cargaHoraria, modalidade: disciplina.modalidade },
+        professoresAutorizados,
+        blocos: blocos as BlocoHorario[],
+        semanasLetivas,
+        estado,
+      })
+
       resultado.alocadas.push(...saida.alocadas)
       resultado.pendencias.push(...saida.pendencias)
       novasAlocacoes.push(...saida.registros)
     }
   }
+
   if (novasAlocacoes.length > 0) await prisma.alocacao.createMany({ data: novasAlocacoes })
+
   resultado.resumo.alocadas += resultado.alocadas.length
   resultado.resumo.pendentes = resultado.pendencias.length
-  resultado.resumo.taxaSucesso = resultado.resumo.total > 0 ? Math.round((resultado.resumo.alocadas / resultado.resumo.total) * 100) : 0
+  resultado.resumo.taxaSucesso =
+    resultado.resumo.total > 0
+      ? Math.round((resultado.resumo.alocadas / resultado.resumo.total) * 100)
+      : 0
+
   return resultado
 }
 
-export async function gerarGradeCurso({ cursoId, periodoLetivoId, substituirExistentes = false }: any): Promise<ResultadoGradeCurso> {
+// ─── Função pública: gerarGradeCurso ─────────────────────────────────────────
+
+export async function gerarGradeCurso({
+  cursoId,
+  periodoLetivoId,
+  substituirExistentes = false,
+}: {
+  cursoId: string
+  periodoLetivoId: string
+  substituirExistentes?: boolean
+}): Promise<ResultadoGradeCurso> {
   const [curso, periodoLetivo, turmas, professores, blocos] = await Promise.all([
     prisma.curso.findUnique({ where: { id: cursoId } }),
     prisma.periodoLetivo.findUnique({ where: { id: periodoLetivoId } }),
@@ -386,83 +811,224 @@ export async function gerarGradeCurso({ cursoId, periodoLetivoId, substituirExis
     }),
     prisma.blocoHorario.findMany({ orderBy: [{ turno: 'asc' }, { ordem: 'asc' }] }),
   ])
+
   if (!curso || !periodoLetivo) throw new Error('Curso ou período letivo não encontrado.')
+
   const semanasLetivas = calcularSemanasLetivas(periodoLetivo.dataInicio, periodoLetivo.dataFim)
-  if (substituirExistentes) await prisma.alocacao.deleteMany({ where: { turma: { cursoId, periodoLetivoId } } })
+  const blocosPorId = new Map(blocos.map((b) => [b.id, b as BlocoHorario]))
+
+  if (substituirExistentes) {
+    await prisma.alocacao.deleteMany({ where: { turma: { cursoId, periodoLetivoId } } })
+  }
+
   const estado = criarEstadoVazio()
   if (!substituirExistentes) {
-    const alocacoesExistentes = await prisma.alocacao.findMany({ where: { turma: { cursoId, periodoLetivoId }, status: { not: 'CONFLITO' } }, select: { professorId: true, turmaId: true, blocoId: true, diaSemana: true, disciplinaId: true } })
-    preCarregarEstado(alocacoesExistentes, estado)
+    const existentes = await prisma.alocacao.findMany({
+      where: { turma: { cursoId, periodoLetivoId }, status: { not: 'CONFLITO' } },
+      select: { professorId: true, turmaId: true, blocoId: true, diaSemana: true, disciplinaId: true },
+    })
+    preCarregarEstado(existentes, blocosPorId, estado)
   }
+
   const resultadosPorTurma: ResultadoTurma[] = []
   const todasAlocadasGlobal: AlocacaoCriada[] = []
   const novasAlocacoes: any[] = []
+
   for (const turma of turmas) {
-    const disciplinasDoPeriodo = turma.curso.disciplinas.filter((cd: any) => cd.periodo === turma.periodo && cd.disciplina.ativo)
+    const todasDisciplinas = turma.curso.disciplinas.filter(
+      (cd: any) => cd.periodo === turma.periodo && cd.disciplina.ativo
+    )
     if (!estado.turmaOcupada.has(turma.id)) estado.turmaOcupada.set(turma.id, new Set())
+
     const alocadasTurma: AlocacaoCriada[] = []
     const pendenciasTurma: PendenciaDetalhada[] = []
-    for (const cursoDisciplina of disciplinasDoPeriodo) {
+
+    // Sprint 8.1: processar disciplinas online primeiro
+    const { online, presenciais } = separarDisciplinas(todasDisciplinas)
+
+    for (const cursoDisciplina of [...online, ...presenciais]) {
       const disciplina = cursoDisciplina.disciplina
+
       if (!substituirExistentes) {
         const necessidade = calcularNecessidadeSemanal(disciplina.cargaHoraria, semanasLetivas)
-        const encontrosExistentes = await prisma.alocacao.count({ where: { turmaId: turma.id, disciplinaId: disciplina.id, status: { not: 'CONFLITO' } } })
+        const encontrosExistentes = await prisma.alocacao.count({
+          where: { turmaId: turma.id, disciplinaId: disciplina.id, status: { not: 'CONFLITO' } },
+        })
         if (encontrosExistentes >= necessidade) continue
       }
+
       const professoresAutorizados = professorsFilter(professores, disciplina.id)
       if (professoresAutorizados.length === 0) {
         const necessidade = calcularNecessidadeSemanal(disciplina.cargaHoraria, semanasLetivas)
-        for (let i = 0; i < necessidade; i++) pendenciasTurma.push({ turmaId: turma.id, turmaNome: turma.nome, disciplinaId: disciplina.id, disciplinaNome: disciplina.nome, ...classificarPendencia({ professoresVinculados: 0, professoresDisponiveis: 0, todosNoLimite: false, semDisponibilidade: false }), professoresVinculados: 0, professoresDisponiveis: 0 })
+        for (let i = 0; i < necessidade; i++) {
+          pendenciasTurma.push({
+            turmaId: turma.id,
+            turmaNome: turma.nome,
+            disciplinaId: disciplina.id,
+            disciplinaNome: disciplina.nome,
+            ...classificarPendencia({ professoresVinculados: 0, todosNoLimite: false, semDisponibilidade: false }),
+            professoresVinculados: 0,
+            professoresDisponiveis: 0,
+          })
+        }
         continue
       }
-      const saida = alocarDisciplinaCompleta({ turma: { id: turma.id, nome: turma.nome, turno: turma.turno }, disciplina: { id: disciplina.id, nome: disciplina.nome, cargaHoraria: disciplina.cargaHoraria }, professoresAutorizados, blocos, semanasLetivas, estado })
+
+      const saida = alocarDisciplinaCompleta({
+        turma: { id: turma.id, nome: turma.nome, turno: turma.turno },
+        disciplina: {
+          id: disciplina.id,
+          nome: disciplina.nome,
+          cargaHoraria: disciplina.cargaHoraria,
+          modalidade: disciplina.modalidade,
+        },
+        professoresAutorizados,
+        blocos: blocos as BlocoHorario[],
+        semanasLetivas,
+        estado,
+      })
+
       alocadasTurma.push(...saida.alocadas)
       pendenciasTurma.push(...saida.pendencias)
       novasAlocacoes.push(...saida.registros)
       todasAlocadasGlobal.push(...saida.alocadas)
     }
-    resultadosPorTurma.push({ turma: { id: turma.id, codigo: turma.codigo, nome: turma.nome, periodo: turma.periodo, turno: turma.turno }, alocadas: alocadasTurma, pendencias: pendenciasTurma, conflitos: [] })
+
+    resultadosPorTurma.push({
+      turma: { id: turma.id, codigo: turma.codigo, nome: turma.nome, periodo: turma.periodo, turno: turma.turno },
+      alocadas: alocadasTurma,
+      pendencias: pendenciasTurma,
+      conflitos: [],
+    })
   }
+
   if (novasAlocacoes.length > 0) await prisma.alocacao.createMany({ data: novasAlocacoes })
-  const conflitosGlobais = detectarConflitosCruzados(todasAlocadasGlobal, blocos)
+
+  // Detectar e marcar conflitos cruzados
+  const conflitosGlobais = detectarConflitosCruzados(todasAlocadasGlobal, blocosPorId)
   if (conflitosGlobais.length > 0) {
     for (const conflito of conflitosGlobais) {
-      await prisma.alocacao.updateMany({ where: { professorId: conflito.professorId, diaSemana: conflito.diaSemana, blocoId: novasAlocacoes.find((a) => a.diaSemana === conflito.diaSemana)?.blocoId, status: 'CONFIRMADA' }, data: { status: 'CONFLITO' } })
+      const blocoConflito = novasAlocacoes.find(
+        (a) => a.diaSemana === conflito.diaSemana && a.professorId === conflito.professorId
+      )?.blocoId
+      if (blocoConflito) {
+        await prisma.alocacao.updateMany({
+          where: {
+            professorId: conflito.professorId,
+            diaSemana: conflito.diaSemana,
+            blocoId: blocoConflito,
+            status: 'CONFIRMADA',
+          },
+          data: { status: 'CONFLITO' },
+        })
+      }
     }
-    for (const resultadoTurma of resultadosPorTurma) resultadoTurma.conflitos = conflitosGlobais.filter((c) => c.turma1 === resultadoTurma.turma.nome || c.turma2 === resultadoTurma.turma.nome)
+    for (const rt of resultadosPorTurma) {
+      rt.conflitos = conflitosGlobais.filter(
+        (c) => c.turma1 === rt.turma.nome || c.turma2 === rt.turma.nome
+      )
+    }
   }
+
   const totalAlocadas = resultadosPorTurma.reduce((acc, r) => acc + r.alocadas.length, 0)
   const totalPendencias = resultadosPorTurma.reduce((acc, r) => acc + r.pendencias.length, 0)
   const totalDisciplinas = totalAlocadas + totalPendencias
-  return { curso: { id: curso.id, nome: curso.nome }, periodoLetivo: { id: periodoLetivo.id, descricao: periodoLetivo.descricao }, turmas: resultadosPorTurma, conflitosGlobais, resumo: { totalDisciplinas, totalAlocadas, totalPendencias, totalConflitos: conflitosGlobais.length, taxaSucesso: totalDisciplinas > 0 ? Math.round((totalAlocadas / totalDisciplinas) * 100) : 0 } }
+
+  return {
+    curso: { id: curso.id, nome: curso.nome },
+    periodoLetivo: { id: periodoLetivo.id, descricao: periodoLetivo.descricao },
+    turmas: resultadosPorTurma,
+    conflitosGlobais,
+    resumo: {
+      totalDisciplinas,
+      totalAlocadas,
+      totalPendencias,
+      totalConflitos: conflitosGlobais.length,
+      taxaSucesso: totalDisciplinas > 0 ? Math.round((totalAlocadas / totalDisciplinas) * 100) : 0,
+    },
+  }
 }
 
-// Helper to filter professors (kept small to avoid repeated inline code)
-function professorsFilter(professores: any[], disciplinaId: string) {
-  return professores.filter((p: any) => p.disciplinas.some((pd: any) => pd.disciplinaId === disciplinaId))
-}
+// ─── Função pública: simularAlocacao ─────────────────────────────────────────
 
-export async function simularAlocacao({ alocacaoId, turmaId, disciplinaId, professorId, blocoId, diaSemana }: any): Promise<{ valido: boolean; erros: string[] }> {
+export async function simularAlocacao({
+  alocacaoId,
+  turmaId,
+  disciplinaId,
+  professorId,
+  blocoId,
+  diaSemana,
+}: {
+  alocacaoId?: string
+  turmaId: string
+  disciplinaId: string
+  professorId: string
+  blocoId: string
+  diaSemana: DiaSemana
+}): Promise<{ valido: boolean; erros: string[] }> {
   const erros: string[] = []
+
   const [professor, bloco, turma] = await Promise.all([
-    prisma.professor.findUnique({ where: { id: professorId }, include: { usuario: { select: { nome: true } }, disciplinas: true, disponibilidades: true, disponibilidadesBloco: { where: { disponivel: true } }, alocacoes: { where: { status: { not: 'CONFLITO' }, ...(alocacaoId ? { id: { not: alocacaoId } } : {}) } } } }),
+    prisma.professor.findUnique({
+      where: { id: professorId },
+      include: {
+        usuario: { select: { nome: true } },
+        disciplinas: true,
+        disponibilidades: true,
+        disponibilidadesBloco: { where: { disponivel: true } },
+        alocacoes: {
+          where: {
+            status: { not: 'CONFLITO' },
+            ...(alocacaoId ? { id: { not: alocacaoId } } : {}),
+          },
+        },
+      },
+    }),
     prisma.blocoHorario.findUnique({ where: { id: blocoId } }),
     prisma.turma.findUnique({ where: { id: turmaId } }),
   ])
+
   if (!professor) return { valido: false, erros: ['Professor nao encontrado'] }
   if (!bloco) return { valido: false, erros: ['Bloco nao encontrado'] }
   if (!turma) return { valido: false, erros: ['Turma nao encontrada'] }
-  if (!professor.disciplinas.some((pd: any) => pd.disciplinaId === disciplinaId)) erros.push(`${professor.usuario.nome} nao esta autorizado para esta disciplina`)
+
+  if (!professor.disciplinas.some((pd: any) => pd.disciplinaId === disciplinaId))
+    erros.push(`${professor.usuario.nome} nao esta autorizado para esta disciplina`)
+
   const temDisponibilidadePorBloco = professor.disponibilidadesBloco.length > 0
-  const disponivel = temDisponibilidadePorBloco ? professor.disponibilidadesBloco.some((db: any) => db.diaSemana === diaSemana && db.blocoId === blocoId) : professor.disponibilidades.some((d: any) => d.diaSemana === diaSemana && d.turno === bloco.turno)
+  const disponivel = temDisponibilidadePorBloco
+    ? professor.disponibilidadesBloco.some((db: any) => db.diaSemana === diaSemana && db.blocoId === blocoId)
+    : professor.disponibilidades.some((d: any) => d.diaSemana === diaSemana && d.turno === bloco.turno)
   if (!disponivel) erros.push(`${professor.usuario.nome} nao esta disponivel neste dia e horario`)
-  if (!turnoCompativel(turma.turno, bloco.turno)) erros.push('O bloco selecionado nao pertence ao turno da turma')
+
+  if (!turnoCompativel(turma.turno as Turno, bloco.turno as Turno))
+    erros.push('O bloco selecionado nao pertence ao turno da turma')
+
   const [conflitoProfessor, conflitoTurma] = await Promise.all([
-    prisma.alocacao.findFirst({ where: { professorId, blocoId, diaSemana, status: { not: 'CONFLITO' }, ...(alocacaoId ? { id: { not: alocacaoId } } : {}) } }),
-    prisma.alocacao.findFirst({ where: { turmaId, blocoId, diaSemana, status: { not: 'CONFLITO' }, ...(alocacaoId ? { id: { not: alocacaoId } } : {}) } }),
+    prisma.alocacao.findFirst({
+      where: {
+        professorId,
+        blocoId,
+        diaSemana,
+        status: { not: 'CONFLITO' },
+        ...(alocacaoId ? { id: { not: alocacaoId } } : {}),
+      },
+    }),
+    prisma.alocacao.findFirst({
+      where: {
+        turmaId,
+        blocoId,
+        diaSemana,
+        status: { not: 'CONFLITO' },
+        ...(alocacaoId ? { id: { not: alocacaoId } } : {}),
+      },
+    }),
   ])
+
   if (conflitoProfessor) erros.push(`${professor.usuario.nome} ja esta alocado neste horario`)
   if (conflitoTurma) erros.push('Esta turma ja possui aula neste horario')
-  if (professor.alocacoes.length >= professor.cargaHorariaMax) erros.push(`${professor.usuario.nome} atingiu a carga horaria maxima`)
+  if (professor.alocacoes.length >= professor.cargaHorariaMax)
+    erros.push(`${professor.usuario.nome} atingiu a carga horaria maxima`)
+
   return { valido: erros.length === 0, erros }
 }

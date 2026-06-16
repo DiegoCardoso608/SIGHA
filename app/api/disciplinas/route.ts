@@ -14,6 +14,7 @@ const createDisciplinaSchema = z.object({
   codigo: z.string().min(2, 'Código obrigatório').max(20),
   nome: z.string().min(3, 'Nome obrigatório').max(100),
   cargaHoraria: z.number().int().min(1, 'Carga horária inválida').max(500),
+  modalidade: z.enum(['PRESENCIAL', 'ONLINE']).default('PRESENCIAL'),
   // Vinculações opcionais com cursos
   cursos: z
     .array(
@@ -125,7 +126,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const { codigo, nome, cargaHoraria, cursos } = parsed.data
+  const { codigo, nome, cargaHoraria, modalidade, cursos } = parsed.data
 
   // Verificar código duplicado
   const existing = await prisma.disciplina.findUnique({ where: { codigo } })
@@ -143,6 +144,7 @@ export async function POST(request: NextRequest) {
         codigo,
         nome,
         cargaHoraria,
+        modalidade,
         ativo: true,
       },
     })
@@ -166,7 +168,7 @@ export async function POST(request: NextRequest) {
         entidadeId: created.id,
         campo: null,
         valorAntes: null,
-        valorDepois: JSON.stringify({ codigo, nome, cargaHoraria }),
+        valorDepois: JSON.stringify({ codigo, nome, cargaHoraria, modalidade }),
         motivo: null,
       },
     })
