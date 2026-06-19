@@ -35,6 +35,7 @@ interface Disciplina {
   codigo: string
   nome: string
   cargaHoraria: number
+  blocosSemanais: number
   modalidade: 'PRESENCIAL' | 'ONLINE'
   ativo: boolean
   cursos: CursoDisciplina[]
@@ -57,6 +58,11 @@ const formSchema = z.object({
     .int()
     .min(1)
     .max(500),
+  blocosSemanais: z
+    .number()
+    .int()
+    .min(1)
+    .max(50),
   modalidade: z.enum(['PRESENCIAL', 'ONLINE']),
   cursos: z.array(
     z.object({
@@ -93,6 +99,9 @@ export default function DisciplinaModal({
       codigo: disciplina?.codigo ?? '',
       nome: disciplina?.nome ?? '',
       cargaHoraria: disciplina?.cargaHoraria ?? undefined,
+      blocosSemanais:
+        disciplina?.blocosSemanais ??
+        Math.max(1, Math.ceil((disciplina?.cargaHoraria ?? 1) / 20)),
       modalidade: disciplina?.modalidade ?? 'PRESENCIAL',
       cursos: disciplina?.cursos.map((cd) => ({
         cursoId: cd.cursoId,
@@ -211,6 +220,23 @@ export default function DisciplinaModal({
                 />
                 {errors.cargaHoraria && (
                   <p className="text-red-500 text-xs mt-1">{errors.cargaHoraria.message}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">
+                  Blocos semanais <span className="text-red-500">*</span>
+                </label>
+                <input
+                  {...register('blocosSemanais', { valueAsNumber: true })}
+                  type="number"
+                  min={1}
+                  max={50}
+                  placeholder="Ex: 4"
+                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-[#2e7d32] bg-white"
+                />
+                {errors.blocosSemanais && (
+                  <p className="text-red-500 text-xs mt-1">{errors.blocosSemanais.message}</p>
                 )}
               </div>
 

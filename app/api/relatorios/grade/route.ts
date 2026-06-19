@@ -1,5 +1,11 @@
 // app/api/relatorios/grade/route.ts
-// Sprint 5.7 E — Exportação da Grade Acadêmica em PDF (padrão CCG-FOR-01)
+// Sprint 5.7 E - Exportação da Grade Acadêmica em PDF (padrão CCG-FOR-01)
+//
+// GET /api/relatorios/grade?cursoId=...&periodoLetivoId=...
+//
+// Retorna:
+//   - application/json  ? dados estruturados da grade (para debug / preview)
+//   - application/pdf   ? arquivo binário (quando header Accept: application/pdf)
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
@@ -33,6 +39,7 @@ interface TurmaRaw {
       disciplina: { id: string; nome: string; ativo: boolean }
     }>
   }
+  sala?: string | null
 }
 
 export async function GET(request: NextRequest) {
@@ -43,7 +50,7 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
-    const cursoId        = searchParams.get('cursoId')
+    const cursoId = searchParams.get('cursoId')
     const periodoLetivoId = searchParams.get('periodoLetivoId')
 
     if (!cursoId || !periodoLetivoId) {
@@ -107,30 +114,31 @@ export async function GET(request: NextRequest) {
 
         return {
           turma: {
-            id:      turma.id,
-            codigo:  turma.codigo,
-            nome:    turma.nome,
+            id: turma.id,
+            codigo: turma.codigo,
+            nome: turma.nome,
             periodo: turma.periodo,
-            turno:   turma.turno,
+            turno: turma.turno,
+            sala: (turma as unknown as { sala?: string | null }).sala ?? null,
           },
           alocadas: turma.alocacoes
-            .filter((a) => a.professor && a.bloco)
+            .filter((a) => a.bloco)
             .map((a) => ({
-              turmaId:       turma.id,
-              turmaNome:     turma.nome,
-              disciplinaId:  a.disciplinaId,
+              turmaId: turma.id,
+              turmaNome: turma.nome,
+              disciplinaId: a.disciplinaId,
               disciplinaNome: a.disciplina.nome,
-              professorId:   a.professorId ?? '',
-              professorNome: a.professor!.usuario.nome,
-              blocoId:       a.blocoId,
-              blocoInicio:   a.bloco.inicio,
-              blocoFim:      a.bloco.fim,
-              diaSemana:     a.diaSemana,
+              professorId: a.professorId ?? null,
+              professorNome: a.professor?.usuario.nome ?? 'Não informado',
+              blocoId: a.blocoId,
+              blocoInicio: a.bloco.inicio,
+              blocoFim: a.bloco.fim,
+              diaSemana: a.diaSemana,
             })),
           pendencias: disciplinasDoPeriodo
             .filter((cd) => !idsAlocadas.has(cd.disciplinaId))
             .map((cd) => ({
-              disciplinaId:   cd.disciplinaId,
+              disciplinaId: cd.disciplinaId,
               disciplinaNome: cd.disciplina.nome,
             })),
         }
@@ -146,15 +154,14 @@ export async function GET(request: NextRequest) {
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
 
-      // NextResponse expects BodyInit; convert Node Buffer to ArrayBuffer slice
       const uint8 = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
 
       return new NextResponse(uint8 as any, {
         status: 200,
         headers: {
-          'Content-Type':        'application/pdf',
+          'Content-Type': 'application/pdf',
           'Content-Disposition': `attachment; filename="${nomeArquivo}"`,
-          'Content-Length':      String(buffer.byteLength),
+          'Content-Length': String(buffer.byteLength),
         },
       })
     }

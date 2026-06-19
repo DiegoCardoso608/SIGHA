@@ -92,18 +92,21 @@ export async function GET(request: NextRequest) {
 
       // Monta AlocacaoCriada a partir das alocações do banco
       const alocadasTurma: AlocacaoCriada[] = turma.alocacoes
-        .filter((a) => a.professor && a.bloco)
+        .filter((a) => a.bloco)
         .map((a) => ({
+          id: a.id,
           turmaId: turma.id,
           turmaNome: turma.nome,
           disciplinaId: a.disciplinaId,
           disciplinaNome: a.disciplina.nome,
-          professorId: a.professorId!,
-          professorNome: a.professor!.usuario.nome,
+          professorId: a.professorId,
+          professorNome: a.professor?.usuario?.nome ?? null,
           blocoId: a.blocoId,
           blocoInicio: a.bloco.inicio,
           blocoFim: a.bloco.fim,
           diaSemana: a.diaSemana as DiaSemana,
+          origem: a.origem,
+          fixa: a.fixa,
         }))
 
       todasAlocadas.push(...alocadasTurma)
@@ -143,6 +146,7 @@ export async function GET(request: NextRequest) {
     const conflitosGlobais: ConflitoCruzado[] = []
     const porProfessor = new Map<string, AlocacaoCriada[]>()
     for (const a of todasAlocadas) {
+      if (!a.professorId || !a.professorNome) continue
       if (!porProfessor.has(a.professorId)) porProfessor.set(a.professorId, [])
       porProfessor.get(a.professorId)!.push(a)
     }
@@ -158,9 +162,11 @@ export async function GET(request: NextRequest) {
             a.turmaId !== b.turmaId
           ) {
             const bloco = mapaBlocos.get(a.blocoId)
+            const professorId = a.professorId!
+            const professorNome = a.professorNome!
             conflitosGlobais.push({
-              professorId: a.professorId,
-              professorNome: a.professorNome,
+              professorId,
+              professorNome,
               diaSemana: a.diaSemana,
               blocoInicio: bloco?.inicio ?? '',
               blocoFim: bloco?.fim ?? '',

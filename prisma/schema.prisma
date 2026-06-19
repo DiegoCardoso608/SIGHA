@@ -48,6 +48,11 @@ enum StatusAlocacao {
   CONFLITO
 }
 
+enum OrigemAlocacao {
+  AUTOMATICA
+  MANUAL
+}
+
 enum Modalidade {
   PRESENCIAL
   EAD
@@ -108,13 +113,14 @@ model Curso {
 }
 
 model Disciplina {
-  id           String   @id @default(cuid())
-  codigo       String   @unique
-  nome         String
-  cargaHoraria Int
-  modalidade   ModalidadeDisciplina @default(PRESENCIAL)
-  ativo        Boolean  @default(true)
-  criadoEm     DateTime @default(now())
+  id             String   @id @default(cuid())
+  codigo         String   @unique
+  nome           String
+  cargaHoraria   Int
+  blocosSemanais Int
+  modalidade     ModalidadeDisciplina @default(PRESENCIAL)
+  ativo          Boolean  @default(true)
+  criadoEm       DateTime @default(now())
 
   cursos      CursoDisciplina[]
   professores ProfessorDisciplina[]
@@ -268,6 +274,8 @@ model Alocacao {
   diaSemana    DiaSemana
   online       Boolean        @default(false)
   status       StatusAlocacao @default(PENDENTE)
+  origem       OrigemAlocacao @default(AUTOMATICA)
+  fixa         Boolean        @default(false)
   criadoEm     DateTime       @default(now())
   atualizadoEm DateTime       @updatedAt
 
@@ -295,4 +303,17 @@ model LogAlteracao {
   usuario Usuario @relation(fields: [usuarioId], references: [id])
 
   @@map("logs_alteracao")
+}
+
+model Importacao {
+  id            String   @id @default(cuid())
+  tipo          String
+  arquivo       String
+  totalLinhas   Int
+  importadas    Int
+  ignoradas     Int
+  detalhesErros String   @db.Text
+  criadoEm      DateTime @default(now())
+
+  @@map("importacoes")
 }

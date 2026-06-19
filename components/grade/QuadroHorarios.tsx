@@ -3,8 +3,10 @@
 // components/grade/QuadroHorarios.tsx
 // Sprint 5.6 A — Grade semanal visual de uma turma com expansão controlada externamente
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { AlocacaoCriada, PendenciaDetalhada, ConflitoCruzado, TipoPendencia } from '@/lib/algoritmo'
+import { AulaEditorModal } from '@/components/grade/AulaEditorModal'
 
 // ─── CLEANUP: Remover código duplicado posterior ao export ───────────────────
 
@@ -45,6 +47,29 @@ interface QuadroHorariosProps {
   // Sprint 5.6 A — Controle externo de expansão
   expandido?: boolean
   onToggle?: () => void
+  onRefreshGrade?: () => Promise<unknown>
+  onFixarAlocacao?: (id: string) => Promise<unknown>
+  onDesfixarAlocacao?: (id: string) => Promise<unknown>
+  onRemoverAlocacao?: (id: string) => Promise<unknown>
+  onCriarAlocacaoManual?: (dados: {
+    turmaId: string
+    disciplinaId: string
+    professorId?: string | null
+    blocoId: string
+    diaSemana: string
+    online?: boolean
+    fixa?: boolean
+  }) => Promise<unknown>
+  onEditarAlocacaoManual?: (
+    id: string,
+    dados: {
+      disciplinaId?: string
+      professorId?: string | null
+      blocoId?: string
+      diaSemana?: string
+      online?: boolean
+    }
+  ) => Promise<unknown>
   // Compatibilidade com Sprint 5.5
   defaultExpandido?: boolean
 }
@@ -56,9 +81,26 @@ export function QuadroHorarios({
   conflitos,
   expandido,
   onToggle,
+  onRefreshGrade,
+  onFixarAlocacao,
+  onDesfixarAlocacao,
+  onRemoverAlocacao,
+  onCriarAlocacaoManual,
+  onEditarAlocacaoManual,
   defaultExpandido = true,
 }: QuadroHorariosProps) {
   const router = useRouter()
+  const [editorAberto, setEditorAberto] = useState(false)
+  const [editorModo, setEditorModo] = useState<'create' | 'edit'>('create')
+  const [editorAlocacao, setEditorAlocacao] = useState<{
+    id?: string
+    disciplinaId?: string
+    professorId?: string | null
+    blocoId?: string
+    diaSemana?: string
+    online?: boolean
+    fixa?: boolean
+  } | null>(null)
 
   // Determinar se deve estar expandido: prioritário é expandido (Sprint 5.6 A), fallback é defaultExpandido (Sprint 5.5)
   const estaExpandido = expandido !== undefined ? expandido : defaultExpandido
@@ -90,6 +132,31 @@ export function QuadroHorarios({
     MANHA: 'Manhã',
     TARDE: 'Tarde',
     NOITE: 'Noite',
+  }
+
+  const abrirModalCriacao = (diaSemana: string, blocoId: string) => {
+    setEditorModo('create')
+    setEditorAlocacao({
+      disciplinaId: '',
+      professorId: null,
+      blocoId,
+      diaSemana,
+      online: false,
+      fixa: false,
+    })
+    setEditorAberto(true)
+  }
+
+  const abrirModalEdicao = (alocacao: AlocacaoCriada) => {
+    setEditorModo('edit')
+    setEditorAlocacao(alocacao)
+    setEditorAberto(true)
+  }
+
+  const fecharEditor = async () => {
+    setEditorAberto(false)
+    setEditorAlocacao(null)
+    await onRefreshGrade?.()
   }
 
   return (
@@ -165,8 +232,18 @@ export function QuadroHorarios({
       {/* Conteúdo colapsável */}
       {temConteudo && estaExpandido && (
         <div className="p-4 space-y-4">
+          <div className="flex items-center justify-between gap-3 rounded border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2">
+            <p className="text-[10px] font-medium tracking-widest text-[#6b7280] uppercase">Legenda</p>
+            <div className="flex flex-wrap gap-2 text-[10px]">
+              <span className="rounded bg-[#e8f0fe] px-2 py-0.5 text-[#1d4ed8]">🟦 Automática</span>
+              <span className="rounded bg-[#e8f5e9] px-2 py-0.5 text-[#2e7d32]">🟩 Manual</span>
+              <span className="rounded bg-[#fff4e5] px-2 py-0.5 text-[#c2410c]">🟧 Fixada</span>
+              <span className="rounded bg-[#fef2f2] px-2 py-0.5 text-[#dc2626]">⚠️ Conflito</span>
+            </div>
+          </div>
+
           {/* Grid semanal */}
-          {alocadas.length > 0 && blocosUnicos.length > 0 && (
+          {blocosUnicos.length > 0 && (
             <div className="overflow-x-auto">
               <table className="w-full text-xs border-collapse min-w-[600px]">
                 <thead>
@@ -206,32 +283,58 @@ export function QuadroHorarios({
                           <td key={dia.key} className="py-1 px-1 align-top">
                             {alocacaoDia ? (
                               <div
-                                className={`rounded px-1.5 py-1.5 text-white ${
+                                role="button"
+                                tabIndex={0}
+                                onClick={() => abrirModalEdicao(alocacaoDia)}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault()
+                                    abrirModalEdicao(alocacaoDia)
+                                  }
+                                }}
+                                className={`w-full cursor-pointer rounded px-1.5 py-2 text-left text-white transition ${
                                   temConflito
                                     ? 'bg-[#e53935]'
-                                    : dia.key === 'SABADO'
-                                    ? 'bg-[#7b9ccc]'
+                                    : alocacaoDia.fixa
+                                    ? 'bg-[#f59e0b]'
+                                    : alocacaoDia.origem === 'MANUAL'
+                                    ? 'bg-[#2e7d32]'
                                     : 'bg-[#4a7abf]'
-                                }`}
+                                } ${alocacaoDia.fixa ? 'ring-2 ring-[#f97316]' : ''}`}
                               >
-                                <p
-                                  className="text-[10px] font-medium leading-tight"
-                                  style={{ color: 'rgba(255,255,255,0.95)' }}
-                                >
-                                  {alocacaoDia.disciplinaNome}
-                                </p>
-                                <p
-                                  className="text-[9px] mt-0.5 leading-tight truncate"
-                                  style={{ color: 'rgba(255,255,255,0.75)' }}
-                                >
-                                  {alocacaoDia.professorNome}
-                                </p>
-                                {temConflito && (
-                                  <p className="text-[9px] mt-0.5 font-semibold">⚠️ Conflito</p>
-                                )}
+                                <div className="flex items-start justify-between gap-1">
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-[10px] font-medium leading-tight">
+                                      {alocacaoDia.disciplinaNome}
+                                    </p>
+                                    <p className="text-[9px] mt-0.5 leading-tight truncate opacity-90">
+                                      {alocacaoDia.professorNome ?? 'Sem professor'}
+                                    </p>
+                                    <div className="mt-1 flex gap-1">
+                                      {alocacaoDia.origem === 'MANUAL' && (
+                                        <span className="rounded bg-white/15 px-1 py-0.25 text-[8px]">MANUAL</span>
+                                      )}
+                                      {alocacaoDia.fixa && (
+                                        <span className="rounded bg-white/15 px-1 py-0.25 text-[8px]">FIXA</span>
+                                      )}
+                                    </div>
+                                    {temConflito && (
+                                      <p className="text-[9px] mt-0.5 font-semibold">⚠️ Conflito</p>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
                             ) : (
-                              <div className="h-10" />
+                              <button
+                                type="button"
+                                onClick={() => abrirModalCriacao(dia.key, bloco.id)}
+                                className="flex h-16 w-full items-center justify-center rounded border border-dashed border-[#cbd5e1] bg-[#f8fafc] text-[#64748b] hover:border-[#94a3b8] hover:bg-[#eef2ff]"
+                              >
+                                <span className="text-center">
+                                  <span className="block text-base font-semibold">+</span>
+                                  <span className="text-[10px]">Nova Aula</span>
+                                </span>
+                              </button>
                             )}
                           </td>
                         )
@@ -304,6 +407,19 @@ export function QuadroHorarios({
           )}
         </div>
       )}
+
+      <AulaEditorModal
+        open={editorAberto}
+        mode={editorModo}
+        turmaId={turma.id}
+        alocacao={editorAlocacao}
+        onClose={fecharEditor}
+        onCreate={onCriarAlocacaoManual}
+        onEdit={onEditarAlocacaoManual}
+        onDelete={onRemoverAlocacao}
+        onFixar={onFixarAlocacao}
+        onDesfixar={onDesfixarAlocacao}
+      />
     </div>
   )
 }

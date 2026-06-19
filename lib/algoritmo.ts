@@ -12,16 +12,19 @@ export type TipoPendencia =
   | 'CONFLITO_DE_HORARIO'
 
 export interface AlocacaoCriada {
+  id?: string
   turmaId: string
   turmaNome: string
   disciplinaId: string
   disciplinaNome: string
-  professorId: string
-  professorNome: string
+  professorId: string | null
+  professorNome: string | null
   blocoId: string
   blocoInicio: string
   blocoFim: string
   diaSemana: DiaSemana
+  origem?: 'AUTOMATICA' | 'MANUAL'
+  fixa?: boolean
 }
 
 export interface PendenciaDetalhada {
@@ -150,9 +153,8 @@ function turnoCompativel(turnoTurma: Turno, turnoBloco: Turno): boolean {
   return turnoTurma === turnoBloco
 }
 
-function calcularNecessidadeSemanal(cargaHoraria: number, semanasLetivas = SEMANAS_LETIVAS_PADRAO): number {
-  const necessidade = Math.ceil(cargaHoraria / semanasLetivas)
-  return Math.max(1, Math.min(5, necessidade))
+function calcularBlocosSemanais(disciplina: { cargaHoraria: number; blocosSemanais?: number | null }): number {
+  return Math.max(1, disciplina.blocosSemanais ?? 1)
 }
 
 function calcularSemanasLetivas(dataInicio: Date, dataFim: Date): number {
@@ -401,14 +403,14 @@ function gerarCandidatosParaDisciplina({
   estado,
 }: {
   turma: { id: string; nome: string; turno: Turno }
-  disciplina: { id: string; nome: string; cargaHoraria: number; modalidade?: string }
+  disciplina: { id: string; nome: string; cargaHoraria: number; blocosSemanais?: number | null; modalidade?: string }
   professoresAutorizados: any[]
   blocos: BlocoHorario[]
   semanasLetivas: number
   estado: EstadoAlocacao
 }) {
   const isOnline = disciplina.modalidade === 'ONLINE'
-  const necessidade = calcularNecessidadeSemanal(disciplina.cargaHoraria, semanasLetivas)
+  const necessidade = calcularBlocosSemanais(disciplina)
   const candidatosPorProfessorDia: Map<string, GrupoCandidato[]> = new Map()
 
   const blocosTurno = blocos.filter((b) => turnoCompativel(turma.turno, b.turno))
@@ -528,7 +530,7 @@ function ordenarProfessores(professores: any[], estado: EstadoAlocacao): any[] {
 
 interface OpcaoAloc {
   turma: { id: string; nome: string; turno: Turno }
-  disciplina: { id: string; nome: string; cargaHoraria: number; modalidade?: string }
+  disciplina: { id: string; nome: string; cargaHoraria: number; blocosSemanais?: number | null; modalidade?: string }
   professoresAutorizados: any[]
   blocos: BlocoHorario[]
   semanasLetivas: number
@@ -569,7 +571,17 @@ function alocarDisciplinaCompleta(opcao: OpcaoAloc): SaidaAloc {
   for (const g of melhorPlano) {
     for (const bloco of g.blocos) {
       alocadas.push({ turmaId: turma.id, turmaNome: turma.nome, disciplinaId: disciplina.id, disciplinaNome: disciplina.nome, professorId: g.professorId, professorNome: g.professorNome, blocoId: bloco.id, blocoInicio: bloco.inicio, blocoFim: bloco.fim, diaSemana: g.diaSemana })
-      registros.push({ turmaId: turma.id, disciplinaId: disciplina.id, professorId: g.professorId, blocoId: bloco.id, diaSemana: g.diaSemana, online: isOnline, status: 'CONFIRMADA' })
+      registros.push({
+        turmaId: turma.id,
+        disciplinaId: disciplina.id,
+        professorId: g.professorId,
+        blocoId: bloco.id,
+        diaSemana: g.diaSemana,
+        online: isOnline,
+        status: 'CONFIRMADA',
+        origem: 'AUTOMATICA',
+        fixa: false,
+      })
       registrarNoEstado({ turmaId: turma.id, professorId: g.professorId, blocoId: bloco.id, blocoOrdem: bloco.ordem, diaSemana: g.diaSemana, estado })
     }
   }
@@ -605,6 +617,7 @@ function detectarConflitosCruzados(
   const porProfessor = new Map<string, AlocacaoCriada[]>()
 
   for (const a of alocadas) {
+    if (!a.professorId || !a.professorNome) continue
     if (!porProfessor.has(a.professorId)) porProfessor.set(a.professorId, [])
     porProfessor.get(a.professorId)!.push(a)
   }
@@ -616,9 +629,11 @@ function detectarConflitosCruzados(
         const b = lista[j]
         if (a.diaSemana === b.diaSemana && a.blocoId === b.blocoId && a.turmaId !== b.turmaId) {
           const bloco = blocosPorId.get(a.blocoId)
+          const professorId = a.professorId!
+          const professorNome = a.professorNome!
           conflitos.push({
-            professorId: a.professorId,
-            professorNome: a.professorNome,
+            professorId,
+            professorNome,
             diaSemana: a.diaSemana,
             blocoInicio: bloco?.inicio ?? '',
             blocoFim: bloco?.fim ?? '',
@@ -703,15 +718,29 @@ export async function gerarGrade({
 
   if (substituirExistentes) {
     await prisma.alocacao.deleteMany({
-      where: { turma: { periodoLetivoId, ...(turmaIds?.length ? { id: { in: turmaIds } } : {}) } },
+      where: {
+        turma: { periodoLetivoId, ...(turmaIds?.length ? { id: { in: turmaIds } } : {}) },
+        origem: 'AUTOMATICA',
+      },
     })
-  } else {
-    const existentes = await prisma.alocacao.findMany({
-      where: { turma: { periodoLetivoId }, status: { not: 'CONFLITO' } },
-      select: { professorId: true, turmaId: true, blocoId: true, diaSemana: true, disciplinaId: true },
-    })
-    preCarregarEstado(existentes, blocosPorId, estado)
   }
+
+  const existentes = await prisma.alocacao.findMany({
+    where: {
+      turma: { periodoLetivoId, ...(turmaIds?.length ? { id: { in: turmaIds } } : {}) },
+      status: { not: 'CONFLITO' },
+    },
+    select: {
+      professorId: true,
+      turmaId: true,
+      blocoId: true,
+      diaSemana: true,
+      disciplinaId: true,
+      origem: true,
+      fixa: true,
+    },
+  })
+  preCarregarEstado(existentes, blocosPorId, estado)
 
   const resultado: ResultadoAlocacao = {
     alocadas: [],
@@ -732,7 +761,7 @@ export async function gerarGrade({
 
     for (const cursoDisciplina of [...online, ...presenciais]) {
       const disciplina = cursoDisciplina.disciplina
-      const necessidade = calcularNecessidadeSemanal(disciplina.cargaHoraria, semanasLetivas)
+      const necessidade = calcularBlocosSemanais(disciplina)
       resultado.resumo.total += necessidade
 
       if (!substituirExistentes) {
@@ -763,7 +792,7 @@ export async function gerarGrade({
 
       const saida = alocarDisciplinaCompleta({
         turma: { id: turma.id, nome: turma.nome, turno: turma.turno },
-        disciplina: { id: disciplina.id, nome: disciplina.nome, cargaHoraria: disciplina.cargaHoraria, modalidade: disciplina.modalidade },
+        disciplina: { id: disciplina.id, nome: disciplina.nome, cargaHoraria: disciplina.cargaHoraria, blocosSemanais: disciplina.blocosSemanais, modalidade: disciplina.modalidade },
         professoresAutorizados,
         blocos: blocos as BlocoHorario[],
         semanasLetivas,
@@ -835,17 +864,28 @@ export async function gerarGradeCurso({
   const blocosPorId = new Map(blocos.map((b) => [b.id, b as BlocoHorario]))
 
   if (substituirExistentes) {
-    await prisma.alocacao.deleteMany({ where: { turma: { cursoId, periodoLetivoId } } })
+    await prisma.alocacao.deleteMany({
+      where: {
+        turma: { cursoId, periodoLetivoId },
+        origem: 'AUTOMATICA',
+      },
+    })
   }
 
   const estado = criarEstadoVazio()
-  if (!substituirExistentes) {
-    const existentes = await prisma.alocacao.findMany({
-      where: { turma: { cursoId, periodoLetivoId }, status: { not: 'CONFLITO' } },
-      select: { professorId: true, turmaId: true, blocoId: true, diaSemana: true, disciplinaId: true },
-    })
-    preCarregarEstado(existentes, blocosPorId, estado)
-  }
+  const existentes = await prisma.alocacao.findMany({
+    where: { turma: { cursoId, periodoLetivoId }, status: { not: 'CONFLITO' } },
+    select: {
+      professorId: true,
+      turmaId: true,
+      blocoId: true,
+      diaSemana: true,
+      disciplinaId: true,
+      origem: true,
+      fixa: true,
+    },
+  })
+  preCarregarEstado(existentes, blocosPorId, estado)
 
   const resultadosPorTurma: ResultadoTurma[] = []
   const todasAlocadasGlobal: AlocacaoCriada[] = []
@@ -867,7 +907,7 @@ export async function gerarGradeCurso({
       const disciplina = cursoDisciplina.disciplina
 
       if (!substituirExistentes) {
-        const necessidade = calcularNecessidadeSemanal(disciplina.cargaHoraria, semanasLetivas)
+        const necessidade = calcularBlocosSemanais(disciplina)
         const encontrosExistentes = await prisma.alocacao.count({
           where: { turmaId: turma.id, disciplinaId: disciplina.id, status: { not: 'CONFLITO' } },
         })
@@ -876,7 +916,7 @@ export async function gerarGradeCurso({
 
       const professoresAutorizados = professorsFilter(professores, disciplina.id)
       if (professoresAutorizados.length === 0) {
-        const necessidade = calcularNecessidadeSemanal(disciplina.cargaHoraria, semanasLetivas)
+        const necessidade = calcularBlocosSemanais(disciplina)
         for (let i = 0; i < necessidade; i++) {
           pendenciasTurma.push({
             turmaId: turma.id,
@@ -897,6 +937,7 @@ export async function gerarGradeCurso({
           id: disciplina.id,
           nome: disciplina.nome,
           cargaHoraria: disciplina.cargaHoraria,
+          blocosSemanais: disciplina.blocosSemanais,
           modalidade: disciplina.modalidade,
         },
         professoresAutorizados,

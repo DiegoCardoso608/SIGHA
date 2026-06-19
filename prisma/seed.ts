@@ -115,6 +115,7 @@ async function main() {
         codigo: d.codigo,
         nome: d.nome,
         cargaHoraria: d.cargaHoraria,
+        blocosSemanais: Math.max(1, Math.ceil(d.cargaHoraria / 20)),
         ativo: true,
       },
     })

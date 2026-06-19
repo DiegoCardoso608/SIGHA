@@ -11,6 +11,8 @@ export interface Alocacao {
   blocoId: string
   diaSemana: string
   online: boolean
+  origem?: 'AUTOMATICA' | 'MANUAL'
+  fixa?: boolean
   status: 'PENDENTE' | 'CONFIRMADA' | 'CONFLITO'
   turma: {
     id: string
@@ -157,16 +159,75 @@ export function useGrade() {
     return data.alocacao as Alocacao
   }, [])
 
-  const removerAlocacao = useCallback(async (id: string, motivo?: string) => {
+  const removerAlocacao = useCallback(async (id: string) => {
     setErro(null)
-    const res = await fetch(`/api/alocacoes/${id}`, {
+    const res = await fetch(`/api/grade/alocacoes/${id}`, {
       method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ motivo }),
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(data.error ?? 'Erro ao remover alocacao')
     setAlocacoes((prev) => prev.filter((alocacao) => alocacao.id !== id))
+  }, [])
+
+  const criarAlocacaoManual = useCallback(async (dados: {
+    turmaId: string
+    disciplinaId: string
+    professorId?: string | null
+    blocoId: string
+    diaSemana: string
+    online?: boolean
+    fixa?: boolean
+  }) => {
+    setErro(null)
+    const res = await fetch('/api/grade/alocacoes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(dados),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error ?? 'Erro ao criar alocacao manual')
+    setAlocacoes((prev) => [...prev, data.alocacao])
+    return data.alocacao as Alocacao
+  }, [])
+
+  const editarAlocacaoManual = useCallback(async (
+    id: string,
+    dados: {
+      disciplinaId?: string
+      professorId?: string | null
+      blocoId?: string
+      diaSemana?: string
+      online?: boolean
+    }
+  ) => {
+    setErro(null)
+    const res = await fetch(`/api/grade/alocacoes/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(dados),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error ?? 'Erro ao editar alocacao manual')
+    setAlocacoes((prev) => prev.map((alocacao) => (alocacao.id === id ? data.alocacao : alocacao)))
+    return data.alocacao as Alocacao
+  }, [])
+
+  const fixarAlocacao = useCallback(async (id: string) => {
+    setErro(null)
+    const res = await fetch(`/api/grade/alocacoes/${id}/fixar`, { method: 'POST' })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error ?? 'Erro ao fixar alocacao')
+    setAlocacoes((prev) => prev.map((alocacao) => (alocacao.id === id ? data.alocacao : alocacao)))
+    return data.alocacao as Alocacao
+  }, [])
+
+  const desfixarAlocacao = useCallback(async (id: string) => {
+    setErro(null)
+    const res = await fetch(`/api/grade/alocacoes/${id}/desfixar`, { method: 'POST' })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error ?? 'Erro ao desfixar alocacao')
+    setAlocacoes((prev) => prev.map((alocacao) => (alocacao.id === id ? data.alocacao : alocacao)))
+    return data.alocacao as Alocacao
   }, [])
 
   const gerarGrade = useCallback(async (params: {
@@ -348,6 +409,10 @@ export function useGrade() {
     criarAlocacao,
     atualizarAlocacao,
     removerAlocacao,
+    criarAlocacaoManual,
+    editarAlocacaoManual,
+    fixarAlocacao,
+    desfixarAlocacao,
     gerarGrade,
     gerarGradeCurso,
     simularAlocacao,

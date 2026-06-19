@@ -207,6 +207,9 @@ export default function DisciplinasPage() {
                   C.H.
                 </th>
                 <th className="text-left px-4 py-3 text-xs font-medium tracking-widest text-gray-700 uppercase">
+                  Blocos
+                </th>
+                <th className="text-left px-4 py-3 text-xs font-medium tracking-widest text-gray-700 uppercase">
                   Cursos
                 </th>
                 <th className="text-left px-4 py-3 text-xs font-medium tracking-widest text-gray-700 uppercase">
@@ -235,6 +238,9 @@ export default function DisciplinasPage() {
                   <td className="px-4 py-3 text-gray-900 font-medium">{d.nome}</td>
                   <td className="px-4 py-3 text-gray-900 whitespace-nowrap">
                     {d.cargaHoraria}h
+                  </td>
+                  <td className="px-4 py-3 text-gray-900 whitespace-nowrap">
+                    {d.blocosSemanais}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">

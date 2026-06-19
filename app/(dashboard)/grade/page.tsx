@@ -41,6 +41,11 @@ export default function GradePage() {
     toggleTurma,
     expandirTodas,
     limparGrade,
+    removerAlocacao,
+    fixarAlocacao,
+    desfixarAlocacao,
+    criarAlocacaoManual,
+    editarAlocacaoManual,
   } = useGrade()
 
   const [cursos, setCursos] = useState<Curso[]>([])
@@ -78,6 +83,7 @@ export default function GradePage() {
     setErro(null)
     try {
       await gerarGradeCurso({ cursoId, periodoLetivoId, substituirExistentes })
+      await carregarGrade(cursoId, periodoLetivoId)
     } catch (error) {
       setErro(error instanceof Error ? error.message : 'Erro ao gerar grade')
     }
@@ -292,6 +298,12 @@ export default function GradePage() {
                         conflitos={resultadoTurma.conflitos}
                         expandido={turmasExpandidas[resultadoTurma.turma.id] ?? true}
                         onToggle={() => toggleTurma(resultadoTurma.turma.id)}
+                        onRefreshGrade={() => carregarGrade(cursoId, periodoLetivoId)}
+                        onRemoverAlocacao={removerAlocacao}
+                        onFixarAlocacao={fixarAlocacao}
+                        onDesfixarAlocacao={desfixarAlocacao}
+                        onCriarAlocacaoManual={criarAlocacaoManual}
+                        onEditarAlocacaoManual={editarAlocacaoManual}
                       />
                     ))}
                   </div>

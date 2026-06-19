@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useGrade, type Alocacao, type ResultadoGeracao } from '@/hooks/useGrade'
+import { AulaEditorModal } from '@/components/grade/AulaEditorModal'
 
 const DIAS = [
   { key: 'SEGUNDA', label: 'Segunda' },
@@ -34,53 +35,6 @@ interface BlocoHorario {
   fim: string
   turno: string
   ordem: number
-}
-
-interface ProfessorOption {
-  id: string
-  nome: string
-}
-
-function AulaCard({
-  alocacao,
-  onTrocarProfessor,
-  onRemover,
-}: {
-  alocacao: Alocacao
-  onTrocarProfessor: (alocacao: Alocacao) => void
-  onRemover: (id: string) => void
-}) {
-  const cor =
-    alocacao.status === 'CONFLITO'
-      ? 'border-red-300 bg-red-50 text-red-900'
-      : alocacao.online
-        ? 'border-indigo-300 bg-indigo-50 text-indigo-900'
-        : 'border-blue-300 bg-blue-50 text-blue-950'
-
-  return (
-    <div className={`min-h-20 rounded-md border p-2 text-xs ${cor}`}>
-      <div className="font-semibold leading-tight">{alocacao.disciplina.nome}</div>
-      <div className="mt-1 text-[11px] opacity-80">
-        {alocacao.professor?.usuario.nome ?? 'Sem professor'}
-      </div>
-      <div className="mt-2 flex gap-2">
-        <button
-          type="button"
-          className="rounded border border-current px-2 py-1 text-[11px] font-medium"
-          onClick={() => onTrocarProfessor(alocacao)}
-        >
-          Professor
-        </button>
-        <button
-          type="button"
-          className="rounded border border-red-300 px-2 py-1 text-[11px] font-medium text-red-700"
-          onClick={() => onRemover(alocacao.id)}
-        >
-          Remover
-        </button>
-      </div>
-    </div>
-  )
 }
 
 function ResultadoModal({
@@ -137,78 +91,39 @@ function ResultadoModal({
   )
 }
 
-function TrocarProfessorModal({
-  alocacao,
-  professores,
-  salvando,
-  erro,
-  onSalvar,
-  onFechar,
-}: {
-  alocacao: Alocacao
-  professores: ProfessorOption[]
-  salvando: boolean
-  erro: string | null
-  onSalvar: (professorId: string) => void
-  onFechar: () => void
-}) {
-  const [professorId, setProfessorId] = useState(alocacao.professorId ?? '')
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-        <h2 className="text-lg font-semibold text-gray-900">Trocar professor</h2>
-        <p className="mt-1 text-sm text-gray-700">
-          {alocacao.disciplina.nome} em {alocacao.diaSemana}, {alocacao.bloco.inicio}-{alocacao.bloco.fim}
-        </p>
-
-        <label className="mt-5 block text-xs font-semibold uppercase text-gray-700">Professor</label>
-        <select
-          className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-green-700"
-          value={professorId}
-          onChange={(event) => setProfessorId(event.target.value)}
-        >
-          <option value="">Selecione</option>
-          {professores.map((professor) => (
-            <option key={professor.id} value={professor.id}>
-              {professor.nome}
-            </option>
-          ))}
-        </select>
-
-        {erro && <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{erro}</div>}
-
-        <div className="mt-6 flex justify-end gap-2">
-          <button className="rounded-md px-4 py-2 text-sm text-gray-700" onClick={onFechar}>
-            Cancelar
-          </button>
-          <button
-            className="rounded-md bg-green-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-            disabled={!professorId || salvando}
-            onClick={() => onSalvar(professorId)}
-          >
-            {salvando ? 'Salvando...' : 'Salvar'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export default function AlocacoesPage() {
-  const { alocacoes, carregando, gerando, erro, buscarAlocacoes, gerarGrade, atualizarAlocacao, removerAlocacao } = useGrade()
+  const {
+    alocacoes,
+    carregando,
+    gerando,
+    erro,
+    buscarAlocacoes,
+    gerarGrade,
+    removerAlocacao,
+    criarAlocacaoManual,
+    editarAlocacaoManual,
+    fixarAlocacao,
+    desfixarAlocacao,
+  } = useGrade()
 
   const [periodos, setPeriodos] = useState<PeriodoLetivo[]>([])
   const [turmas, setTurmas] = useState<Turma[]>([])
   const [blocos, setBlocos] = useState<BlocoHorario[]>([])
-  const [professores, setProfessores] = useState<ProfessorOption[]>([])
   const [periodoSelecionado, setPeriodoSelecionado] = useState('')
   const [turmaSelecionada, setTurmaSelecionada] = useState('')
   const [resultado, setResultado] = useState<ResultadoGeracao | null>(null)
-  const [alocacaoParaTrocar, setAlocacaoParaTrocar] = useState<Alocacao | null>(null)
   const [mensagem, setMensagem] = useState<string | null>(null)
-  const [erroModal, setErroModal] = useState<string | null>(null)
-  const [salvandoProfessor, setSalvandoProfessor] = useState(false)
+  const [editorAberto, setEditorAberto] = useState(false)
+  const [editorModo, setEditorModo] = useState<'create' | 'edit'>('create')
+  const [editorAlocacao, setEditorAlocacao] = useState<{
+    id?: string
+    disciplinaId?: string
+    professorId?: string | null
+    blocoId?: string
+    diaSemana?: string
+    online?: boolean
+    fixa?: boolean
+  } | null>(null)
 
   useEffect(() => {
     const turmaIdInicial = new URLSearchParams(window.location.search).get('turmaId')
@@ -229,12 +144,6 @@ export default function AlocacoesPage() {
 
       setPeriodos(listaPeriodos)
       setBlocos((blocosData.blocos ?? []) as BlocoHorario[])
-      setProfessores(
-        ((professoresData.data ?? []) as Array<{ id: string; usuario: { nome: string } }>).map((professor) => ({
-          id: professor.id,
-          nome: professor.usuario.nome,
-        }))
-      )
 
       const periodoPadrao = listaPeriodos.find((periodo) => periodo.status === 'ATIVO') ?? listaPeriodos[0]
       if (turmaUrl) {
@@ -296,24 +205,38 @@ export default function AlocacoesPage() {
     [buscarAlocacoes, gerarGrade, periodoSelecionado, turmaSelecionada]
   )
 
-  async function handleRemover(id: string) {
-    if (!confirm('Remover esta alocacao?')) return
-    await removerAlocacao(id, 'Removido manualmente na Sprint 5')
-    setMensagem('Alocacao removida.')
+  const abrirModalCriacao = (diaSemana: string, blocoId: string) => {
+    setEditorModo('create')
+    setEditorAlocacao({
+      disciplinaId: '',
+      professorId: null,
+      blocoId,
+      diaSemana,
+      online: false,
+      fixa: false,
+    })
+    setEditorAberto(true)
   }
 
-  async function handleSalvarProfessor(professorId: string) {
-    if (!alocacaoParaTrocar) return
-    setSalvandoProfessor(true)
-    setErroModal(null)
-    try {
-      await atualizarAlocacao(alocacaoParaTrocar.id, { professorId, motivo: 'Troca manual de professor' })
-      setMensagem('Professor atualizado.')
-      setAlocacaoParaTrocar(null)
-    } catch (error) {
-      setErroModal(error instanceof Error ? error.message : 'Erro ao atualizar professor')
-    } finally {
-      setSalvandoProfessor(false)
+  const abrirModalEdicao = (alocacao: Alocacao) => {
+    setEditorModo('edit')
+    setEditorAlocacao({
+      id: alocacao.id,
+      disciplinaId: alocacao.disciplinaId,
+      professorId: alocacao.professorId,
+      blocoId: alocacao.blocoId,
+      diaSemana: alocacao.diaSemana,
+      online: alocacao.online,
+      fixa: alocacao.fixa,
+    })
+    setEditorAberto(true)
+  }
+
+  const fecharEditor = async () => {
+    setEditorAberto(false)
+    setEditorAlocacao(null)
+    if (turmaSelecionada) {
+      await buscarAlocacoes({ turmaId: turmaSelecionada })
     }
   }
 
@@ -417,14 +340,65 @@ export default function AlocacoesPage() {
                   </td>
                   {DIAS.map((dia) => {
                     const alocacao = porSlot.get(`${bloco.id}|${dia.key}`)
+                    const detalhes = alocacao
+                      ? (() => {
+                          const cor =
+                            alocacao.status === 'CONFLITO'
+                              ? 'border-red-300 bg-red-50 text-red-900'
+                              : alocacao.online
+                                ? 'border-indigo-300 bg-indigo-50 text-indigo-900'
+                                : 'border-blue-300 bg-blue-50 text-blue-950'
+                          return { cor }
+                        })()
+                      : null
+
                     return (
                       <td key={dia.key} className="h-24 border-r border-t border-gray-100 p-2 align-top">
-                        {alocacao && (
-                          <AulaCard
-                            alocacao={alocacao}
-                            onTrocarProfessor={setAlocacaoParaTrocar}
-                            onRemover={handleRemover}
-                          />
+                        {alocacao ? (
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => abrirModalEdicao(alocacao)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault()
+                                abrirModalEdicao(alocacao)
+                              }
+                            }}
+                            className={`min-h-20 cursor-pointer rounded-md border p-2 text-xs ${detalhes?.cor}`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="font-semibold leading-tight">{alocacao.disciplina.nome}</div>
+                              {alocacao.fixa && (
+                                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+                                  Fixa
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-1 text-[11px] opacity-80">
+                              {alocacao.professor?.usuario.nome ?? 'Sem professor'}
+                            </div>
+                            <div className="mt-1 flex gap-1">
+                              {alocacao.origem === 'MANUAL' && (
+                                <span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-800">
+                                  Manual
+                                </span>
+                              )}
+                              {alocacao.origem === 'AUTOMATICA' && (
+                                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">
+                                  Automática
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => abrirModalCriacao(dia.key, bloco.id)}
+                            className="flex h-full min-h-20 w-full items-center justify-center rounded-md border border-dashed border-gray-300 bg-gray-50 text-xs text-gray-500 hover:bg-gray-100"
+                          >
+                            + Nova aula
+                          </button>
                         )}
                       </td>
                     )
@@ -437,19 +411,18 @@ export default function AlocacoesPage() {
       </div>
 
       {resultado && <ResultadoModal resultado={resultado} onFechar={() => setResultado(null)} />}
-      {alocacaoParaTrocar && (
-        <TrocarProfessorModal
-          alocacao={alocacaoParaTrocar}
-          professores={professores}
-          salvando={salvandoProfessor}
-          erro={erroModal}
-          onSalvar={handleSalvarProfessor}
-          onFechar={() => {
-            setAlocacaoParaTrocar(null)
-            setErroModal(null)
-          }}
-        />
-      )}
+      <AulaEditorModal
+        open={editorAberto}
+        mode={editorModo}
+        turmaId={turmaSelecionada}
+        alocacao={editorAlocacao}
+        onClose={fecharEditor}
+        onCreate={criarAlocacaoManual}
+        onEdit={editarAlocacaoManual}
+        onDelete={removerAlocacao}
+        onFixar={fixarAlocacao}
+        onDesfixar={desfixarAlocacao}
+      />
     </div>
   )
 }

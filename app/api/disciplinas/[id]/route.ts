@@ -13,6 +13,7 @@ const updateDisciplinaSchema = z.object({
   codigo: z.string().min(2, 'Código obrigatório').max(20).optional(),
   nome: z.string().min(3, 'Nome obrigatório').max(100).optional(),
   cargaHoraria: z.number().int().min(1, 'Carga horária inválida').max(500).optional(),
+  blocosSemanais: z.number().int().min(1, 'Blocos semanais inválidos').max(50).optional(),
   modalidade: z.enum(['PRESENCIAL', 'ONLINE']).optional(),
   cursos: z
     .array(
@@ -106,7 +107,7 @@ export async function PUT(
     )
   }
 
-  const { codigo, nome, cargaHoraria, modalidade, cursos, motivo } = parsed.data
+  const { codigo, nome, cargaHoraria, blocosSemanais, modalidade, cursos, motivo } = parsed.data
 
   // Verifica código duplicado (se estiver sendo alterado)
   if (codigo && codigo !== disciplinaExistente.codigo) {
@@ -128,6 +129,7 @@ export async function PUT(
       codigo: disciplinaExistente.codigo,
       nome: disciplinaExistente.nome,
       cargaHoraria: disciplinaExistente.cargaHoraria,
+      blocosSemanais: disciplinaExistente.blocosSemanais,
       modalidade: disciplinaExistente.modalidade,
     }
 
@@ -136,6 +138,7 @@ export async function PUT(
     if (codigo !== undefined) dadosDisciplina.codigo = codigo
     if (nome !== undefined) dadosDisciplina.nome = nome
     if (cargaHoraria !== undefined) dadosDisciplina.cargaHoraria = cargaHoraria
+    if (blocosSemanais !== undefined) dadosDisciplina.blocosSemanais = blocosSemanais
     if (modalidade !== undefined) dadosDisciplina.modalidade = modalidade
 
     if (Object.keys(dadosDisciplina).length > 0) {
@@ -171,7 +174,7 @@ export async function PUT(
         entidadeId: id,
         campo: 'atualizacao',
         valorAntes: JSON.stringify(snapshot),
-        valorDepois: JSON.stringify({ codigo, nome, cargaHoraria, modalidade }),
+        valorDepois: JSON.stringify({ codigo, nome, cargaHoraria, blocosSemanais, modalidade }),
         motivo: motivo ?? 'Atualização de dados da disciplina',
       },
     })
