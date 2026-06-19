@@ -29,7 +29,7 @@ interface Props {
 
 const STATUS_LABELS = { PLANEJAMENTO: 'Planejamento', ATIVO: 'Ativo', FINALIZADO: 'Finalizado' }
 
-export function PeriodoLetivoModal({ open, onClose, onSubmit, periodo }: Props) {
+export function PeriodoLetivoModal({ open, onClose, onSubmit, periodo, onDelete, onChangeStatus }: Props) {
   const [loading, setLoading] = useState(false)
   const isEdit = !!periodo
 
@@ -57,6 +57,49 @@ export function PeriodoLetivoModal({ open, onClose, onSubmit, periodo }: Props) 
       }
     }
   }, [open, periodo, reset])
+
+  const handleStatusChange = async (nextStatus: FormData['status']) => {
+    if (!periodo) return
+
+    setLoading(true)
+    try {
+      if (onChangeStatus) {
+        await onChangeStatus(periodo.id, nextStatus)
+        return
+      }
+
+      await onSubmit({
+        ano: periodo.ano,
+        semestre: periodo.semestre,
+        dataInicio: periodo.dataInicio,
+        dataFim: periodo.dataFim,
+        status: nextStatus,
+      } as unknown as FormData)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!periodo) return
+
+    setLoading(true)
+    try {
+      if (onDelete) {
+        await onDelete(periodo.id)
+        return
+      }
+
+      const res = await fetch(`/api/periodos-letivos/${periodo.id}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Erro ao excluir período')
+      onClose()
+    } catch (e: any) {
+      alert(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleFormSubmit = async (data: FormData) => {
     setLoading(true)
@@ -159,58 +202,32 @@ export function PeriodoLetivoModal({ open, onClose, onSubmit, periodo }: Props) 
               {isEdit && periodo && (
                 <>
                   {periodo.status === 'FINALIZADO' && (
-                    <button type="button" onClick={async () => {
-                      if (!confirm(`Reativar período ${periodo.descricao}?`)) return
-                      setLoading(true)
-                      try {
-                        if (typeof (window as any) !== 'undefined') {
-                          // call parent handler if provided via props
-                          if ((arguments as any).callee) {}
-                        }
-                        if (typeof (onSubmit) === 'function') {
-                          await onSubmit({
-                            ano: periodo.ano,
-                            semestre: periodo.semestre,
-                            dataInicio: periodo.dataInicio,
-                            dataFim: periodo.dataFim,
-                            status: 'ATIVO',
-                          } as unknown as FormData)
-                        }
-                      } finally { setLoading(false) }
-                    }} className="text-xs text-[#2e7d32] hover:underline">Reativar</button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!confirm(`Reativar período ${periodo.descricao}?`)) return
+                        await handleStatusChange('ATIVO')
+                      }}
+                      className="text-xs text-[#2e7d32] hover:underline"
+                    >
+                      Reativar
+                    </button>
                   )}
                   {periodo.status !== 'PLANEJAMENTO' && (
-                    <button type="button" onClick={async () => {
-                      if (!confirm(`Retornar ${periodo.descricao} para PLANEJAMENTO?`)) return
-                      setLoading(true)
-                      try {
-                        if (typeof (onSubmit) === 'function') {
-                          await onSubmit({
-                            ano: periodo.ano,
-                            semestre: periodo.semestre,
-                            dataInicio: periodo.dataInicio,
-                            dataFim: periodo.dataFim,
-                            status: 'PLANEJAMENTO',
-                          } as unknown as FormData)
-                        }
-                      } finally { setLoading(false) }
-                    }} className="text-xs text-[#6b7280] hover:underline">Retornar para Planejamento</button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!confirm(`Retornar ${periodo.descricao} para PLANEJAMENTO?`)) return
+                        await handleStatusChange('PLANEJAMENTO')
+                      }}
+                      className="text-xs text-[#6b7280] hover:underline"
+                    >
+                      Retornar para Planejamento
+                    </button>
                   )}
                   <button type="button" onClick={async () => {
                     if (!confirm(`Excluir o período ${periodo.descricao}?`)) return
-                    setLoading(true)
-                    try {
-                      if (typeof (onSubmit) === 'function') {
-                        // call delete via fetch directly if parent didn't pass handler
-                        const res = await fetch(`/api/periodos-letivos/${periodo.id}`, { method: 'DELETE' })
-                        const json = await res.json()
-                        if (!res.ok) throw new Error(json.error || 'Erro ao excluir período')
-                        // reload page expectations are handled by parent when modal closes
-                        onClose()
-                      }
-                    } catch (e: any) {
-                      alert(e.message)
-                    } finally { setLoading(false) }
+                    await handleDelete()
                   }} className="text-xs text-[#e53935] hover:underline">Excluir</button>
                 </>
               )}
