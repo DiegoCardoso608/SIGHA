@@ -4,6 +4,12 @@ import { z } from 'zod'
 import { authOptions } from '@/lib/auth'
 import { gerarGrade } from '@/lib/algoritmo'
 
+/**
+ * Endpoint responsável por disparar a geração automática de grade para turmas.
+ *
+ * Requer autenticação e permissões de administrador ou coordenador.
+ */
+
 const schema = z.object({
   periodoLetivoId: z.string().min(1, 'Periodo letivo obrigatorio'),
   turmaIds: z.array(z.string()).optional(),

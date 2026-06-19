@@ -6,6 +6,13 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { simularAlocacao } from '@/lib/algoritmo'
 
+/**
+ * API para consulta e criação de alocações manuais.
+ *
+ * O endpoint valida a integridade dos dados antes de persistir uma nova
+ * alocação e registra a auditoria da mudança.
+ */
+
 const diaSemanaSchema = z.enum(['SEGUNDA', 'TERCA', 'QUARTA', 'QUINTA', 'SEXTA', 'SABADO'])
 
 const criarAlocacaoSchema = z.object({

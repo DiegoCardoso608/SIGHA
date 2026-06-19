@@ -13,6 +13,9 @@ interface CandidatoMatch {
 
 const LIMIAR_MINIMO_SCORE = 0.72
 
+/**
+ * Normaliza textos para comparação robusta entre nomes de colunas e aliases.
+ */
 export function normalizarTexto(valor: string): string {
   return valor
     .normalize('NFD')
@@ -23,6 +26,12 @@ export function normalizarTexto(valor: string): string {
     .trim()
 }
 
+/**
+ * Tenta associar cada coluna do arquivo aos campos esperados da estratégia.
+ *
+ * O algoritmo usa comparação aproximada entre nomes de colunas e aliases,
+ * permitindo importar planilhas com variações de escrita.
+ */
 export function mapearColunas(
   cabecalhos: string[],
   aliases: DicionarioAliases
@@ -63,6 +72,9 @@ export function mapearColunas(
   }
 }
 
+/**
+ * Converte uma linha bruta do Excel para um objeto com campos já mapeados.
+ */
 export function linhaParaMapeada(
   linhaBruta: LinhaBruta,
   mapeamento: MapeamentoColunas

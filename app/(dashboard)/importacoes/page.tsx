@@ -68,7 +68,7 @@ const EXEMPLOS_IMPORTACAO: Record<
       { campo: 'disciplinas', obrigatorio: false, descricao: 'IDs ou nomes das disciplinas autorizadas' },
     ],
     linhas: [
-      ['João Silva', 'joao@instituicao.edu.br', '20240101', 'MESTRE', '20', 'TITULAR', 'MATEMATICA, FISICA'],
+      ['João Silva', 'joao@instituicao.edu.br', '20240101', 'MESTRE', '20', 'TITULAR', 'Banco de Dados, Redes Neurais'],
     ],
   },
   DISCIPLINA: {

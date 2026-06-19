@@ -1,6 +1,17 @@
 import { prisma } from './prisma'
 import type { DiaSemana, Turno } from '@prisma/client'
 
+/**
+ * Motor principal de alocação acadêmica.
+ *
+ * Este módulo recebe turmas, disciplinas, professores e blocos horários,
+ * calcula a necessidade semanal de cada disciplina e tenta montar uma grade
+ * compatível com disponibilidade, turno e carga horária.
+ *
+ * O resultado final é composto por alocações confirmadas, pendências e
+ * conflitos identificados para posterior revisão manual.
+ */
+
 // Sprint 8 + 8.1 — Alocação por Dia Acadêmico + Política EAD/Online
 
 // ─── Tipos públicos ───────────────────────────────────────────────────────────
@@ -667,6 +678,12 @@ function separarDisciplinas(disciplinas: any[]): { online: any[]; presenciais: a
 
 // ─── Função pública: gerarGrade (por período letivo / turmas) ────────────────
 
+/**
+ * Gera alocações automáticas para uma lista de turmas dentro de um período letivo.
+ *
+ * Se `substituirExistentes` for verdadeiro, as alocações automáticas anteriores
+ * são removidas antes da nova tentativa de geração.
+ */
 export async function gerarGrade({
   periodoLetivoId,
   turmaIds,
@@ -819,6 +836,12 @@ export async function gerarGrade({
 
 // ─── Função pública: gerarGradeCurso ─────────────────────────────────────────
 
+/**
+ * Gera a grade completa de um curso para um período letivo.
+ *
+ * O resultado inclui, por turma, a lista de alocações geradas e as pendências
+ * encontradas quando a grade não consegue cobrir totalmente a necessidade.
+ */
 export async function gerarGradeCurso({
   cursoId,
   periodoLetivoId,
@@ -1009,6 +1032,12 @@ export async function gerarGradeCurso({
 
 // ─── Função pública: simularAlocacao ─────────────────────────────────────────
 
+/**
+ * Valida se uma alocação manual pode ser criada ou ajustada.
+ *
+ * A simulação verifica autorização do professor, disponibilidade, compatibilidade
+ * de turno, carga horária e conflitos com outros horários já confirmados.
+ */
 export async function simularAlocacao({
   alocacaoId,
   turmaId,

@@ -38,6 +38,7 @@ export default function GradePage() {
     turmasExpandidas,
     gerarGradeCurso,
     carregarGrade,
+    zerarGrade,
     toggleTurma,
     expandirTodas,
     limparGrade,
@@ -95,6 +96,18 @@ export default function GradePage() {
     const data = await carregarGrade(cursoId, periodoLetivoId)
     if (!data) {
       setErro('Nenhuma grade encontrada para este curso e periodo letivo.')
+    }
+  }
+
+  async function handleZerar() {
+    if (!cursoId || !periodoLetivoId) return
+    setErro(null)
+
+    try {
+      await zerarGrade({ cursoId, periodoLetivoId })
+      setErro(null)
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Erro ao zerar grade')
     }
   }
 
@@ -213,6 +226,14 @@ export default function GradePage() {
               className="px-4 py-2 bg-[#2e7d32] text-white rounded font-medium text-sm hover:bg-[#1b5e20] disabled:opacity-50 disabled:cursor-not-allowed transition"
             >
               {gerando ? 'Gerando...' : 'Gerar Grade'}
+            </button>
+
+            <button
+              onClick={handleZerar}
+              disabled={!cursoId || !periodoLetivoId || gerando}
+              className="px-4 py-2 border border-red-300 text-red-700 rounded font-medium text-sm hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            >
+              {gerando ? 'Zerando...' : 'Zerar Grade'}
             </button>
 
             {/* Exportar PDF institucional — visível apenas com curso e período selecionados */}

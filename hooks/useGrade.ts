@@ -294,6 +294,33 @@ export function useGrade() {
     }
   }, [])
 
+  const zerarGrade = useCallback(async (params: {
+    cursoId: string
+    periodoLetivoId: string
+  }): Promise<{ removidas: number }> => {
+    setGerando(true)
+    setErro(null)
+
+    try {
+      const res = await fetch('/api/grade/limpar', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Erro ao zerar grade')
+
+      setGradeState({ resultado: null, turmasExpandidas: {} })
+      return data as { removidas: number }
+    } catch (error) {
+      const mensagem = error instanceof Error ? error.message : 'Erro desconhecido'
+      setErro(mensagem)
+      throw error
+    } finally {
+      setGerando(false)
+    }
+  }, [])
+
   const simularAlocacao = useCallback(async (params: {
     alocacaoId?: string
     turmaId: string
@@ -415,6 +442,7 @@ export function useGrade() {
     desfixarAlocacao,
     gerarGrade,
     gerarGradeCurso,
+    zerarGrade,
     simularAlocacao,
 
     // ─── Sprint 5.6 A (Consulta persistente) ───────────────────────────────

@@ -5,6 +5,13 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import type { DiaSemana, Prisma, Turno } from '@prisma/client'
 
+/**
+ * API para consulta e atualização da disponibilidade de professores.
+ *
+ * A rota suporta consultas paginadas, filtros por professor, dia, turno e
+ * curso, além da atualização individual de cada bloco/dia.
+ */
+
 const diaSemanaSchema = z.enum(['SEGUNDA', 'TERCA', 'QUARTA', 'QUINTA', 'SEXTA', 'SABADO'])
 const turnoSchema = z.enum(['MANHA', 'TARDE', 'NOITE'])
 

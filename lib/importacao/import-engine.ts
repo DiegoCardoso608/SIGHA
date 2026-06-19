@@ -8,6 +8,13 @@ import type {
   ResultadoLinha,
 } from './types'
 
+/**
+ * Executa o fluxo completo de importação de uma planilha.
+ *
+ * O processo lê o arquivo, mapeia colunas para campos internos, valida cada
+ * linha com a estratégia específica e, quando necessário, salva os registros
+ * no repositório correspondente.
+ */
 export async function executarImportacao<T>(
   conteudo: Buffer,
   strategy: ImportStrategy<T>,

@@ -3,6 +3,12 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
+/**
+ * Endpoint para listar o histórico de importações executadas.
+ *
+ * O resultado inclui paginação e filtro opcional por tipo de importação.
+ */
+
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) {

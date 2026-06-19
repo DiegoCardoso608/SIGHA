@@ -1,12 +1,14 @@
 // sigh/lib/relatorios/gradeInstitucional.tsx
 // Geração do PDF institucional CCG-FOR-01
 import React from 'react'
-import ReactPDF, {
+import {
   Document,
   Page,
   View,
   Text,
   StyleSheet,
+  renderToBuffer,
+  renderToFile,
 } from '@react-pdf/renderer'
 
 const COR = {
@@ -459,12 +461,12 @@ function GradeDocument({ data }: { data: GradeData }) {
 
 export async function gerarBufferPDF(data: GradeData): Promise<Buffer> {
   const element = React.createElement(GradeDocument, { data } as never)
-  return await ReactPDF.renderToBuffer(element as never)
+  return await renderToBuffer(element as never)
 }
 
 export async function salvarPDFEmDisco(data: GradeData, outputPath: string): Promise<string> {
   const element = React.createElement(GradeDocument, { data } as never)
-  await ReactPDF.render(element as never, outputPath)
+  await renderToFile(element as never, outputPath)
   return outputPath
 }
 

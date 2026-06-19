@@ -7,6 +7,12 @@ import { authOptions } from '@/lib/auth'
 import { gerarGradeCurso } from '@/lib/algoritmo'
 import { z } from 'zod'
 
+/**
+ * Endpoint para gerar a grade completa de um curso em um período letivo.
+ *
+ * É uma variação da geração por turma, mas agregada por curso.
+ */
+
 const bodySchema = z.object({
   cursoId: z.string().min(1, 'cursoId é obrigatório'),
   periodoLetivoId: z.string().min(1, 'periodoLetivoId é obrigatório'),
