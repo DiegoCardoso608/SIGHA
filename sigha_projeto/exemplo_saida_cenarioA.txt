@@ -1,0 +1,99 @@
+
+════════════════════════════════════════════════════════════════════════
+  CENÁRIO A · com restrições de dias
+════════════════════════════════════════════════════════════════════════
+  5 turmas · 9 professores · 25 disciplinas ofertadas
+
+════════════════════════════════════════════════════════════════════════
+  GRADES SEMANAIS POR TURMA
+════════════════════════════════════════════════════════════════════════
+
+  CC-2026.1-1A · turno Noite
+              │ SEG              │ TER              │ QUA              │ QUI              │ SEX              
+  ────────────┼──────────────────┼──────────────────┼──────────────────┼──────────────────┼──────────────────
+  18:30-19:20 │ Matemática Aplica│ Lógica de Program│ Design Centrado n│ Gestão de Times -│ Sistemas Computac
+              │ Paulo            │ Carla            │ Paulo            │ Paulo            │ Carla            
+  19:20-20:10 │ Matemática Aplica│ Lógica de Program│ Design Centrado n│ Gestão de Times -│ Sistemas Computac
+              │ Paulo            │ Carla            │ Paulo            │ Paulo            │ Carla            
+  20:30-21:20 │ Matemática Aplica│ Lógica de Program│                  │                  │                  
+              │ Paulo            │ Carla            │                  │                  │                  
+  21:20-22:10 │ Matemática Aplica│ Lógica de Program│                  │                  │                  
+              │ Paulo            │ Carla            │                  │                  │                  
+
+  CC-2026.1-3A · turno Noite
+              │ SEG              │ TER              │ QUA              │ QUI              │ SEX              
+  ────────────┼──────────────────┼──────────────────┼──────────────────┼──────────────────┼──────────────────
+  18:30-19:20 │ Sistemas Operacio│ Database Applicat│ Arquitetura de So│ Redes de Computad│ Programação - Mob
+              │ Marcia           │ Lucas            │ Diego            │ Carla            │ Lucas            
+  19:20-20:10 │ Sistemas Operacio│ Database Applicat│ Arquitetura de So│ Redes de Computad│ Programação - Mob
+              │ Marcia           │ Lucas            │ Diego            │ Carla            │ Lucas            
+  20:30-21:20 │ Sistemas Operacio│ Database Applicat│                  │ Redes de Computad│ Programação - Mob
+              │ Marcia           │ Lucas            │                  │ Carla            │ Lucas            
+  21:20-22:10 │ Sistemas Operacio│ Database Applicat│                  │ Redes de Computad│ Programação - Mob
+              │ Marcia           │ Lucas            │                  │ Carla            │ Lucas            
+
+  CC-2026.1-5A · turno Manhã
+              │ SEG              │ TER              │ QUA              │ QUI              │ SEX              
+  ────────────┼──────────────────┼──────────────────┼──────────────────┼──────────────────┼──────────────────
+  08:00-08:50 │ Game Engine      │ Desenvolvimento d│ Empreendedorismo │ Engenharia de Req│ Machine Learning 
+              │ Fernanda         │ Fernanda         │ Rodrigo          │ Rodrigo          │ Fernanda         
+  08:50-09:40 │ Game Engine      │ Desenvolvimento d│ Empreendedorismo │ Engenharia de Req│ Machine Learning 
+              │ Fernanda         │ Fernanda         │ Rodrigo          │ Rodrigo          │ Fernanda         
+  10:00-10:50 │ Game Engine      │ Desenvolvimento d│ Empreendedorismo │                  │                  
+              │ Fernanda         │ Fernanda         │ Rodrigo          │                  │                  
+  10:50-11:40 │ Game Engine      │ Desenvolvimento d│ Empreendedorismo │                  │                  
+              │ Fernanda         │ Fernanda         │ Rodrigo          │                  │                  
+
+  CC-2026.1-7A · turno Noite
+              │ SEG              │ TER              │ QUA              │ QUI              │ SEX              
+  ────────────┼──────────────────┼──────────────────┼──────────────────┼──────────────────┼──────────────────
+  18:30-19:20 │ Tópicos Integrado│ Metodologia da Pe│ Teste de Software│ Compiladores     │ Segurança da Info
+              │ Rodrigo (sub)    │ Paulo            │ Marcia           │ Diego            │ Marcia           
+  19:20-20:10 │ Tópicos Integrado│ Metodologia da Pe│ Teste de Software│ Compiladores     │ Segurança da Info
+              │ Rodrigo (sub)    │ Paulo            │ Marcia           │ Diego            │ Marcia           
+  20:30-21:20 │ Tópicos Integrado│                  │ Teste de Software│ Compiladores     │                  
+              │ Rodrigo (sub)    │                  │ Marcia           │ Diego            │                  
+  21:20-22:10 │ Tópicos Integrado│                  │ Teste de Software│ Compiladores     │                  
+              │ Rodrigo (sub)    │                  │ Marcia           │ Diego            │                  
+
+  CC-2026.1-2B · turno Tarde
+              │ SEG              │ TER              │ QUA              │ QUI              │ SEX              
+  ────────────┼──────────────────┼──────────────────┼──────────────────┼──────────────────┼──────────────────
+  13:30-14:20 │ Estrutura de Dado│ UX/UI Design     │ Programação Orien│ Engenharia de Sof│ Banco de Dados   
+              │ Ana              │ Julia            │ Ana              │ Rodrigo          │ Lucas            
+  14:20-15:10 │ Estrutura de Dado│ UX/UI Design     │ Programação Orien│ Engenharia de Sof│ Banco de Dados   
+              │ Ana              │ Julia            │ Ana              │ Rodrigo          │ Lucas            
+  15:30-16:20 │ Estrutura de Dado│                  │ Programação Orien│ Engenharia de Sof│ Banco de Dados   
+              │ Ana              │                  │ Ana              │ Rodrigo          │ Lucas            
+  16:20-17:10 │ Estrutura de Dado│                  │ Programação Orien│ Engenharia de Sof│ Banco de Dados   
+              │ Ana              │                  │ Ana              │ Rodrigo          │ Lucas            
+
+════════════════════════════════════════════════════════════════════════
+  CONFLITOS NÃO RESOLVIDOS
+════════════════════════════════════════════════════════════════════════
+  ✔ Nenhum conflito: todas as disciplinas foram alocadas.
+
+════════════════════════════════════════════════════════════════════════
+  VERIFICAÇÃO INDEPENDENTE DAS REGRAS
+════════════════════════════════════════════════════════════════════════
+  ✔ 0 violações: nenhuma disciplina fragmentada em vários dias, nenhum professor ou
+    turma em dois lugares ao mesmo tempo, e só professores habilitados e disponíveis.
+
+════════════════════════════════════════════════════════════════════════
+  ESTATÍSTICAS
+════════════════════════════════════════════════════════════════════════
+  Aulas alocadas:  82 de 82   ██████████████████████████████ 100%
+  Disciplinas alocadas: 25 de 25
+  Com professor substituto: 1
+  Reparos realizados (ofertas movidas): 1
+
+  Uso dos professores (dias usados / dias disponíveis):
+    Rodrigo Silva    ████████████░░░░░░░░ 3/5 dias · 14 aulas
+    Marcia Pantoja   ████████████████████ 3/3 dias · 10 aulas
+    Diego Abreu      ████████████████████ 2/2 dias · 6 aulas
+    Ana Lima         █████████████░░░░░░░ 2/3 dias · 8 aulas
+    Lucas Moreira    █████████████░░░░░░░ 2/3 dias · 12 aulas
+    Paulo Henrique   ████████████████████ 4/4 dias · 10 aulas
+    Carla Nunes      ████████████████████ 3/3 dias · 10 aulas
+    Fernanda Costa   ████████████░░░░░░░░ 3/5 dias · 10 aulas
+    Julia Ramos      ██████░░░░░░░░░░░░░░ 1/3 dias · 2 aulas
