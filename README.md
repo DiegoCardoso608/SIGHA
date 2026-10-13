@@ -1,6 +1,8 @@
-# SIGHA · Simulador de grade horária (paradigma imperativo)
+# C-SIGHA · Simulador de grade horária
 
-Duas versões do **mesmo algoritmo**, ambas sem banco de dados e com os mesmos dados:
+Projeto baseado no meu projeto SIGHA original, com implementações em C e Python para simular a montagem de grades horárias.
+
+As duas versões compartilham o mesmo algoritmo e os mesmos dados, sem necessidade de banco de dados:
 
 | Arquivo | Linguagem | Interface |
 |---|---|---|

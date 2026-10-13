@@ -1,24 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-SIGHA - Simulador de grade horária, com interface gráfica (Python + tkinter)
-
-Janela de verdade (tkinter já vem com o Python): painel, turmas, professores,
-disciplinas e conflitos. Programa em estilo imperativo: estado global mutável,
-funções, laços, matrizes e arquivo JSON. O algoritmo é o mesmo do sigha_sim.c.
-
-Regras:
- - Cada DISCIPLINA é um bloco contínuo no MESMO dia, dentro do turno da turma.
-   Se sobrar espaço no turno, outra disciplina pode usar o mesmo dia.
- - Disponibilidade só por DIA (SEG-SEX). Não há salas.
- - Cada disciplina tem 2 ou mais professores habilitados: o primeiro é o titular;
-   se estiver ocupado ou indisponível, o próximo assume.
- - A mesma disciplina pode ir para várias turmas; o professor nunca pode estar
-   em dois lugares ao mesmo tempo (a oferta é remanejada para outro dia).
-Algoritmo: 1) gulosa  2) reparo (move até 2 ofertas, com rollback)  3) verificação.
-
-Rodar:  python3 sigha_gui.py          (python sigha_gui.py no Windows)
-"""
 import functools
 import json
 import os
@@ -26,9 +5,6 @@ import sys
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-# ============================================================================
-# 1. DADOS PRÉ-CADASTRADOS
-# ============================================================================
 SEG, TER, QUA, QUI, SEX = 1, 2, 4, 8, 16
 TODOS = 31
 DIAS = ["SEG", "TER", "QUA", "QUI", "SEX"]
@@ -48,7 +24,6 @@ SUGESTOES = ["",
              "Habilitar outro professor ou ampliar os dias da disciplina.",
              "Dividir a disciplina: a carga não cabe em um único turno."]
 
-# (nome, dias disponíveis)  -- índice = id do professor
 PROFS = [
     ("Rodrigo Silva", TODOS),
     ("Marcia Pantoja", SEG|QUA|SEX),
@@ -60,7 +35,6 @@ PROFS = [
     ("Fernanda Costa", TODOS),
     ("Julia Ramos", TER|QUA|QUI),
 ]
-# (sigla, nome, aulas/semana, dias permitidos, professores habilitados com o titular primeiro)
 DISCS = [
     ("MAT", "Matemática Aplicada", 4, TODOS, [5, 3, 0]),
     ("LOG", "Lógica de Programação", 4, TODOS, [6, 4, 3]),
@@ -89,8 +63,6 @@ DISCS = [
     ("UXD", "UX/UI Design", 2, TER|QUA|QUI, [8, 7, 3]),
 ]
 HAB_PADRAO = [list(d[4]) for d in DISCS]
-
-# estado do usuário (o que é salvo no arquivo)
 ESTADO = {"turmas": [], "rel": False, "hab": [list(h) for h in HAB_PADRAO]}
 ARQUIVO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sigha_dados.json")
 
@@ -115,13 +87,10 @@ def primeiro_nome(p):
     return PROFS[p][0].split()[0]
 
 
-# ============================================================================
-# 2. SIMULAÇÃO (gulosa + reparo + verificação)
-# ============================================================================
 def simular(estado):
     turmas, rel, hab = estado["turmas"], estado["rel"], estado["hab"]
 
-    ofs = []                                   # cada oferta = (turma, disciplina)
+    ofs = []
     for ti, t in enumerate(turmas):
         for d in t["discs"]:
             ofs.append({"t": ti, "d": d, "p": -1, "n": aulas_disc(d), "dia": -1, "slot": -1, "motivo": 0})
@@ -133,7 +102,7 @@ def simular(estado):
     def dia_ok(d, p, dia):
         return rel or ((DISCS[d][3] & PROFS[p][1]) >> dia & 1) == 1
 
-    def livre(o, p, dia, k):                   # 0 livre, 1 professor ocupado, 2 turma ocupada
+    def livre(o, p, dia, k):
         x = ofs[o]
         for i in range(x["n"]):
             if prof_oc[p][dia][k + i] >= 0:
@@ -156,7 +125,7 @@ def simular(estado):
             turma_oc[x["t"]][x["dia"]][x["slot"] + i] = -1
         x["p"], x["dia"], x["slot"] = -1, -1, -1
 
-    def candidatos(o):                         # (professor, dia, início, ordem do professor)
+    def candidatos(o):
         x = ofs[o]
         lo = turmas[x["t"]]["turno"] * 4
         c = []
@@ -173,7 +142,7 @@ def simular(estado):
     def carga(t, dia):
         return sum(1 for v in turma_oc[t][dia] if v >= 0)
 
-    def tentar(o):                             # titular antes dos substitutos; depois espalha pelos dias
+    def tentar(o):
         melhor, melhor_pts = None, 0
         for p, dia, k, pi in candidatos(o):
             if livre(o, p, dia, k):
@@ -186,7 +155,7 @@ def simular(estado):
         colocar(o, *melhor)
         return True
 
-    def reparar(o):                            # move até 2 ofertas; desfaz tudo (rollback) se não der
+    def reparar(o):
         nonlocal reparos
         x = ofs[o]
         for p, dia, k, _ in candidatos(o):
@@ -209,7 +178,7 @@ def simular(estado):
             if deu:
                 reparos += len(bl)
                 return True
-            for b in bl:                       # rollback
+            for b in bl:
                 if ofs[b]["dia"] >= 0:
                     remover(b)
             remover(o)
@@ -217,14 +186,12 @@ def simular(estado):
                 colocar(b, *ant)
         return False
 
-    # fase 1: mais restritas primeiro (menos posições viáveis por aula)
     viaveis = [len(candidatos(o)) for o in range(len(ofs))]
     ordem = sorted(range(len(ofs)), key=functools.cmp_to_key(
         lambda a, b: viaveis[a] * ofs[b]["n"] - viaveis[b] * ofs[a]["n"]))
     for o in ordem:
         tentar(o)
 
-    # fase 2: reparo (até 4 passadas)
     progresso, passada = True, 0
     while progresso and passada < 4:
         progresso = False
@@ -233,7 +200,6 @@ def simular(estado):
             if ofs[o]["dia"] < 0 and (tentar(o) or reparar(o)):
                 progresso = True
 
-    # motivo de cada conflito
     for o, x in enumerate(ofs):
         if x["dia"] >= 0:
             continue
@@ -247,7 +213,6 @@ def simular(estado):
         c1 = sum(1 for p, dia, k, _ in cands if livre(o, p, dia, k) == 1)
         x["motivo"] = M_PROF_OCUPADO if c1 >= len(cands) - c1 else M_TURMA_OCUPADA
 
-    # fase 3: verificação independente
     viol = 0
     vistos = set()
     for x in ofs:
@@ -270,9 +235,6 @@ def simular(estado):
             "pl": sum(x["n"] for x in ofs if x["dia"] >= 0)}
 
 
-# ============================================================================
-# 3. ARQUIVO (JSON, mesmo formato do simulador em C)
-# ============================================================================
 def dados_para_json():
     return {"versao": 3, "rel": ESTADO["rel"],
             "hab": {str(d): h for d, h in enumerate(ESTADO["hab"])},
@@ -280,7 +242,6 @@ def dados_para_json():
 
 
 def carregar_json(caminho):
-    """Lê e valida; só altera o estado se o arquivo inteiro for válido. Devolve True/False."""
     try:
         with open(caminho, "r", encoding="utf-8") as f:
             x = json.load(f)
@@ -337,16 +298,13 @@ def csv_grade(r):
     return "\n".join(linhas) + "\n"
 
 
-# ============================================================================
-# 4. INTERFACE (tkinter)
-# ============================================================================
 BG, CARD, BD, TX, MU = "#f9fafb", "#ffffff", "#e5e7eb", "#111827", "#6b7280"
 PR, PB, OK, ERRO, AV = "#2563eb", "#eff6ff", "#16a34a", "#dc2626", "#d97706"
 PALETA = ["#bfdbfe", "#fed7aa", "#bbf7d0", "#e9d5ff", "#fef08a", "#a5f3fc",
           "#fecaca", "#d9f99d", "#ddd6fe", "#fde68a", "#99f6e4", "#fbcfe8"]
 FONTE = "Helvetica"
 
-W = {}                       # widgets principais
+W = {}
 view, sel, edit, R = "dash", 0, None, None
 NAV = [("dash", "Dashboard"), ("turmas", "Turmas"), ("profs", "Professores"),
        ("disc", "Disciplinas"), ("conf", "Conflitos")]
@@ -397,7 +355,6 @@ def vazio(pai, texto):
 
 
 def desenhar_grade(pai, tipo, ident, slots):
-    """Grade semanal: tipo 'turma' ou 'prof'; cada disciplina é um bloco colorido."""
     LH, LC, AL, TOPO = 104, 148, 46, 28
     cv = tk.Canvas(pai, width=LH + 5 * LC + 1, height=TOPO + len(slots) * AL + 1, bg=CARD,
                    highlightthickness=1, highlightbackground=BD)
@@ -429,7 +386,6 @@ def desenhar_grade(pai, tipo, ident, slots):
     cv.pack(anchor="w", pady=(4, 12))
 
 
-# ---------------------------------------------------------------- páginas ---
 def pg_dash(p):
     titulo(p, "Dashboard", "%d turmas · %d disciplinas ofertadas" % (len(ESTADO["turmas"]), len(R["ofs"])))
     if not R["ofs"]:
@@ -762,7 +718,6 @@ def pg_conf(p):
         botao(p, "Exportar grade (CSV)", exportar_csv, primario=True).pack(anchor="w", pady=10)
 
 
-# ----------------------------------------------------------- navegação/ações ---
 PAGINAS = {"dash": pg_dash, "turmas": pg_turmas, "profs": pg_profs, "disc": pg_disc, "conf": pg_conf}
 
 
