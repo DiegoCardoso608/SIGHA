@@ -47,8 +47,6 @@ O programa mantém estado mutável em listas e dicionários (`ESTADO`, ofertas e
 
 ## Reflexão sobre o desenvolvimento
 
-A principal dificuldade durante o desenvolvimento deste projeto foi recriar a interface do sistema, pois a lógica de funcionamento do simulador já havia sido desenvolvida anteriormente no projeto SIGHA original, mesmo em outra linguagem a logica já existia. O desafio foi adaptar essa lógica para uma nova implementação em C e Python, mantendo as regras de montagem da grade horária e o funcionamento esperado do sistema.
+A principal dificuldade durante o desenvolvimento deste projeto foi recriar a interface do sistema, pois a lógica de funcionamento do simulador já havia sido desenvolvida anteriormente no projeto SIGHA original, mesmo em outra linguagem a logica já existia. O desafio foi adaptar essa lógica para uma nova implementação em Python, mantendo as regras de montagem da grade horária e o funcionamento esperado do sistema.
 
 Durante o desenvolvimento, foi necessário organizar a interface e integrar os elementos de interação com as funcionalidades já existentes, garantindo que os dados fossem processados corretamente e que a geração da grade respeitasse as restrições definidas.
-
-Como melhoria futura, pretende-se aprimorar a interface, facilitar o cadastro de professores e disciplinas e ampliar as possibilidades de configuração do simulador.
