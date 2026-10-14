@@ -1,73 +1,46 @@
-# C-SIGHA · Simulador de grade horária
+# Py-SIGHA · Simulador de grade horária
 
-Projeto baseado no meu projeto SIGHA original, com implementações em C e Python para simular a montagem de grades horárias.
+Projeto baseado no meu projeto SIGHA original. Esta versão reúne em Python a interface gráfica e a lógica de montagem das grades, sem banco de dados.
 
-As duas versões compartilham o mesmo algoritmo e os mesmos dados, sem necessidade de banco de dados:
-
-| Arquivo | Linguagem | Interface |
-|---|---|---|
-| `sigha_gui.py` | Python 3 + tkinter | **Janela gráfica** (painel, turmas, professores, disciplinas, conflitos) |
-| `sigha_sim.c` | C | Menu de terminal (mesmas funções) |
-
-As duas geram **exatamente a mesma grade** e leem/gravam o mesmo arquivo `sigha_dados.json`.
-
-## Rodar a interface gráfica (Python)
+## Executar
 ```bash
-python3 sigha_gui.py            # Windows: python sigha_gui.py
-python3 sigha_gui.py --exemplo  # já abre com 5 turmas de exemplo
+python sigha_gui.py
+python sigha_gui.py --exemplo
 ```
-Só precisa do Python 3 com tkinter (já vem no instalador do python.org para Windows e macOS;
-no Ubuntu/Debian: `sudo apt install python3-tk`). Nenhum `pip install`.
 
-**Uso:** aba *Turmas* → preencha código/nome/turno, marque as disciplinas e clique em *Criar turma*.
-A grade é recalculada na hora. O botão *Exemplo* carrega 5 turmas prontas. Tudo é salvo sozinho
-em `sigha_dados.json` (ao lado do programa). *Exportar/Importar JSON* servem de backup.
+Requer Python 3 com Tkinter. No instalador oficial do Python para Windows, Tkinter pode ser selecionado como componente; em algumas distribuições Linux é necessário instalar o pacote `python3-tk`. Não requer instalação via `pip`.
 
-## Rodar a versão em C (terminal)
-```bash
-make && ./sigha_sim             # menu interativo
-./sigha_sim --demo --auto       # relatório com as 5 turmas de exemplo
-```
-> Atenção: rode dentro da pasta onde está este `Makefile`. Se aparecer outro menu
-> ("Gerar grade automaticamente", "Adicionar turma"…), é outro programa/executável antigo:
-> rode `make clean && make` e confira que o título é "SIGHA · Cenário A".
+## Uso
+Na aba **Turmas**, informe o código, o nome opcional, o turno e as disciplinas. A grade é recalculada ao atualizar a interface. O botão **Exemplo** carrega cinco turmas de demonstração.
 
-## Regras
-| Regra | Como é garantida |
-|---|---|
-| Disciplina em um bloco só | cada oferta é um bloco contínuo de N aulas no **mesmo dia**, dentro do turno da turma |
-| Mais de uma disciplina por dia | se sobrar espaço no turno, outra disciplina usa o mesmo dia |
-| Disponibilidade só por dia | máscara de bits `dias` do professor e da disciplina (SEG–SEX) |
-| Sem salas | qualquer professor leciona em qualquer lugar |
-| 2+ professores por disciplina | lista `hab`: o 1º é o titular; se estiver ocupado/indisponível, o próximo assume |
-| Mesma disciplina em várias turmas | permitido; o professor não pode estar em dois lugares, então a oferta vai para outro dia |
-| Sem choques | matrizes `prof_oc[prof][dia][horário]` e `turma_oc[turma][dia][horário]` |
+Os dados são salvos em `sigha_dados.json`, ao lado do script. A interface também permite importar e exportar configurações JSON e exportar a grade calculada em CSV.
+
+## Regras da grade
+- Cada disciplina é alocada como um bloco contínuo no mesmo dia e dentro do turno da turma.
+- Cada turno tem quatro horários; uma disciplina precisa caber nesse bloco.
+- Disponibilidade de professores e disciplinas é definida por dia da semana, não por horário.
+- Não há cadastro ou restrição de salas.
+- Cada disciplina tem professores habilitados em uma ordem; o primeiro é o titular e os demais podem substituí-lo.
+- Um professor e uma turma não podem ter duas aulas no mesmo horário.
 
 ## Algoritmo
-1. **Gulosa**: ordena as ofertas da mais restrita (menos posições viáveis por aula) para a mais folgada; escolhe o titular antes dos substitutos e espalha pelos dias.
-2. **Reparo**: para uma oferta que sobrou, remove até 2 ofertas que a bloqueiam, a coloca e tenta realocar as removidas; se não conseguir, **desfaz tudo (rollback)**.
-3. **Verificação**: validador independente reconfere todas as regras sobre a grade final.
+1. A lógica calcula as posições possíveis de cada oferta e ordena as mais restritas antes das demais.
+2. A etapa gulosa tenta alocar cada oferta, priorizando o titular e distribuindo as aulas pelos dias.
+3. Para ofertas pendentes, uma etapa de reparo pode mover até duas ofertas que estejam bloqueando uma posição. Se não conseguir realocá-las, restaura a grade anterior.
+4. Uma verificação final procura violações de turno, disponibilidade, habilitação de professor e sobreposição de horários.
 
-## Recursos do paradigma imperativo usados
-| Recurso | Onde (Python / C) |
-|---|---|
-| Estado global mutável e atribuição | `ESTADO`, `W`, `prof_oc`, `turma_oc` / `profOc`, `turmaOc`, `ofertas[]` |
-| Variáveis, tipos compostos | dicionários e listas / `struct` e `enum` |
-| Vetores e matrizes | `prof_oc[P][5][12]`, `turma_oc[T][5][12]` |
-| Estruturas de controle | `if/elif/else`, `for`, `while`, `break`/`continue` |
-| Laços aninhados | `candidatos()` (professor × dia × início), `desenhar_grade()` |
-| Sub-rotinas | `simular()` com `tentar()`, `reparar()`, `livre()`, `colocar()`, `remover()` |
-| Passagem de parâmetros / ponteiros | funções com parâmetros; em C `const Oferta *x`, `Cand *c` |
-| Máscaras de bits | `(disc_dias & prof_dias) >> dia & 1` |
-| Ordenação | `sorted(..., cmp_to_key)` / insertion sort estável em C |
-| Backtracking com rollback | `reparar()` |
-| Entrada/saída e arquivos | `json`, `open()` / `fopen`, `fgets`, `printf` |
-| Memória dinâmica (só C) | `malloc`/`free` em `carregar_json()` |
-| Validação de entrada | formulários e `messagebox` / `ler_int()`, `confirmar()` |
+O algoritmo é heurístico: o reparo é limitado e não garante encontrar uma grade completa sempre que existir uma solução.
+
+## Paradigma imperativo
+O programa mantém estado mutável em listas e dicionários (`ESTADO`, ofertas e matrizes de ocupação), usa atribuições, condicionais, laços `for` e `while`, funções e estruturas de controle para construir, alocar, mover e validar as aulas. A disponibilidade semanal é representada por máscaras de bits.
 
 ## Arquivos
-`sigha_gui.py` · `sigha_sim.c` · `Makefile` · `exemplo_saida_cenarioA.txt` (saída do relatório em C) · `sigha_dados_exemplo.json` (dados de exemplo: *Importar JSON* na janela, ou *Arquivo → Carregar* no C).
+- `sigha_gui.py`: interface Tkinter e algoritmo de simulação.
+- `sigha_dados.json`: dados salvos da execução atual.
+- `sigha_dados_exemplo.json`: dados para importar como demonstração.
 
 ## Limitações
-- Professores e disciplinas são pré-cadastrados no código; só os professores habilitados de cada disciplina podem ser editados.
-- Até 12 turmas. O reparo move no máximo 2 ofertas por vez.
+- Professores e disciplinas são pré-cadastrados; a interface permite editar quais professores estão habilitados por disciplina, mas não cadastrar novos professores ou disciplinas.
+- Há limite de 12 turmas e os turnos têm quatro horários.
+- A disponibilidade é por dia e não há restrições por horário ou sala.
+- O reparo considera no máximo duas ofertas bloqueadoras por tentativa e percorre até quatro passadas.
